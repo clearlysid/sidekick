@@ -13,16 +13,16 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "spacebot_settings")
-const val DEFAULT_SPACEBOT_BASE_URL = "https://debian.finch-kelvin.ts.net"
 
-data class SpacebotSettings(
-    val baseUrl: String = DEFAULT_SPACEBOT_BASE_URL,
+data class AgentSettings(
+    val backendId: String = AgentBackends.spacebot.id,
+    val baseUrl: String = AgentBackends.spacebot.defaultBaseUrl,
     val authToken: String = "",
 )
 
 class SettingsRepository(private val context: Context) {
 
-    val settingsFlow: Flow<SpacebotSettings> =
+    val settingsFlow: Flow<AgentSettings> =
         context.dataStore.data
             .catch { ex ->
                 if (ex is IOException) {
@@ -32,21 +32,26 @@ class SettingsRepository(private val context: Context) {
                 }
             }
             .map { prefs ->
-                SpacebotSettings(
-                    baseUrl = prefs[BASE_URL_KEY] ?: DEFAULT_SPACEBOT_BASE_URL,
+                val backend = AgentBackends.fromId(prefs[BACKEND_ID_KEY])
+                AgentSettings(
+                    backendId = backend.id,
+                    baseUrl = prefs[BASE_URL_KEY]?.ifBlank { backend.defaultBaseUrl } ?: backend.defaultBaseUrl,
                     authToken = prefs[AUTH_TOKEN_KEY].orEmpty(),
                 )
             }
 
-    suspend fun saveSettings(baseUrl: String, authToken: String) {
+    suspend fun saveSettings(backendId: String, baseUrl: String, authToken: String) {
         context.dataStore.edit { prefs ->
-            val normalizedBaseUrl = baseUrl.trim().trimEnd('/').ifBlank { DEFAULT_SPACEBOT_BASE_URL }
+            val backend = AgentBackends.fromId(backendId)
+            val normalizedBaseUrl = baseUrl.trim().trimEnd('/').ifBlank { backend.defaultBaseUrl }
+            prefs[BACKEND_ID_KEY] = backend.id
             prefs[BASE_URL_KEY] = normalizedBaseUrl
             prefs[AUTH_TOKEN_KEY] = authToken.trim()
         }
     }
 
     private companion object {
+        val BACKEND_ID_KEY = stringPreferencesKey("backend_id")
         val BASE_URL_KEY = stringPreferencesKey("base_url")
         val AUTH_TOKEN_KEY = stringPreferencesKey("auth_token")
     }

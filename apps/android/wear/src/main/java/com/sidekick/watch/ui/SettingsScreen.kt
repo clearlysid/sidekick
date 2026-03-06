@@ -29,8 +29,10 @@ import androidx.wear.compose.material3.lazy.transformedHeight
 
 @Composable
 fun SettingsScreen(
+    agentFlavor: String,
     baseUrl: String,
     authToken: String,
+    onAgentFlavorClick: () -> Unit,
     onBaseUrlChange: (String) -> Unit,
     onAuthTokenChange: (String) -> Unit,
     onSave: () -> Unit,
@@ -63,6 +65,18 @@ fun SettingsScreen(
                         transformation = SurfaceTransformation(transformationSpec),
                     ) {
                         Text("Back", style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+
+                item {
+                    Card(
+                        onClick = onAgentFlavorClick,
+                        modifier = Modifier.fillMaxWidth().transformedHeight(this, transformationSpec),
+                        transformation = SurfaceTransformation(transformationSpec),
+                    ) {
+                        Text("Agent Flavour", style = MaterialTheme.typography.labelSmall)
+                        Text(agentFlavor, style = MaterialTheme.typography.bodyMedium)
+                        Text("Tap to switch", style = MaterialTheme.typography.labelSmall)
                     }
                 }
 

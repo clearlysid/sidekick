@@ -4,10 +4,11 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.sidekick.watch.data.AgentBackends
+import com.sidekick.watch.data.AgentSettings
 import com.sidekick.watch.data.SettingsRepository
 import com.sidekick.watch.data.SpacebotMessage
 import com.sidekick.watch.data.SpacebotRepository
-import com.sidekick.watch.data.SpacebotSettings
 import java.util.UUID
 import kotlin.math.max
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -35,6 +36,7 @@ class ChatViewModel(
                 _uiState.update {
                     it.copy(
                         savedSettings = settings,
+                        agentFlavorInput = if (it.agentFlavorInput.isEmpty()) settings.backendId else it.agentFlavorInput,
                         baseUrlInput = if (it.baseUrlInput.isEmpty()) settings.baseUrl else it.baseUrlInput,
                         authTokenInput = if (it.authTokenInput.isEmpty()) settings.authToken else it.authTokenInput,
                     )
@@ -47,6 +49,7 @@ class ChatViewModel(
         _uiState.update {
             it.copy(
                 screen = Screen.Settings,
+                agentFlavorInput = it.savedSettings.backendId,
                 baseUrlInput = it.savedSettings.baseUrl,
                 authTokenInput = it.savedSettings.authToken,
                 errorMessage = null,
@@ -68,10 +71,32 @@ class ChatViewModel(
         _uiState.update { it.copy(authTokenInput = value) }
     }
 
+    fun cycleAgentFlavor() {
+        _uiState.update { state ->
+            val all = AgentBackends.supported
+            val currentIndex = all.indexOfFirst { it.id == state.agentFlavorInput }.coerceAtLeast(0)
+            val next = all[(currentIndex + 1) % all.size]
+            val current = AgentBackends.fromId(state.agentFlavorInput)
+            val normalizedInputBaseUrl = state.baseUrlInput.trim().trimEnd('/')
+            val nextBaseUrl =
+                when {
+                    state.baseUrlInput.isBlank() -> next.defaultBaseUrl
+                    normalizedInputBaseUrl == current.defaultBaseUrl -> next.defaultBaseUrl
+                    else -> state.baseUrlInput
+                }
+
+            state.copy(
+                agentFlavorInput = next.id,
+                baseUrlInput = nextBaseUrl,
+            )
+        }
+    }
+
     fun saveSettings() {
         val state = _uiState.value
         viewModelScope.launch {
             settingsRepository.saveSettings(
+                backendId = state.agentFlavorInput,
                 baseUrl = state.baseUrlInput,
                 authToken = state.authTokenInput,
             )
@@ -147,9 +172,10 @@ class ChatViewModel(
         if (state.isSending || state.isPolling) return
 
         val settings = state.savedSettings
+        val backend = AgentBackends.fromId(settings.backendId)
         if (settings.baseUrl.isBlank()) {
             _uiState.update {
-                it.copy(errorMessage = "Set URL in Settings first.")
+                it.copy(errorMessage = "Set ${backend.displayName} URL in Settings first.")
             }
             return
         }
@@ -257,7 +283,8 @@ class ChatViewModel(
 data class ChatUiState(
     val screen: Screen = Screen.Chat,
     val messages: List<ChatMessage> = emptyList(),
-    val savedSettings: SpacebotSettings = SpacebotSettings(),
+    val savedSettings: AgentSettings = AgentSettings(),
+    val agentFlavorInput: String = "",
     val baseUrlInput: String = "",
     val authTokenInput: String = "",
     val isSending: Boolean = false,
@@ -270,7 +297,13 @@ data class ChatUiState(
     val isVoiceDetected: Boolean = false,
     val draftMessage: String = "",
     val errorMessage: String? = null,
-)
+) {
+    val selectedAgentFlavorName: String
+        get() = AgentBackends.fromId(agentFlavorInput).displayName
+
+    val activeAgentName: String
+        get() = AgentBackends.fromId(savedSettings.backendId).displayName
+}
 
 data class ChatMessage(
     val id: String = UUID.randomUUID().toString(),

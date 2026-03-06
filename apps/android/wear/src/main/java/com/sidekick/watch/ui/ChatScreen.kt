@@ -97,7 +97,7 @@ fun ChatScreen(
                             transformation = SurfaceTransformation(transformationSpec),
                         ) {
                             Text(
-                                text = if (isUser) "You" else "Spacebot",
+                                text = if (isUser) "You" else uiState.activeAgentName,
                                 style = MaterialTheme.typography.labelSmall,
                                 color = if (isUser) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary,
                             )

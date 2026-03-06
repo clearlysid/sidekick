@@ -93,8 +93,10 @@ class MainActivity : ComponentActivity() {
 
                     Screen.Settings -> {
                         SettingsScreen(
+                            agentFlavor = uiState.selectedAgentFlavorName,
                             baseUrl = uiState.baseUrlInput,
                             authToken = uiState.authTokenInput,
+                            onAgentFlavorClick = viewModel::cycleAgentFlavor,
                             onBaseUrlChange = viewModel::onBaseUrlChanged,
                             onAuthTokenChange = viewModel::onAuthTokenChanged,
                             onSave = viewModel::saveSettings,
