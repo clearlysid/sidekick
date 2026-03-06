@@ -1,0 +1,14 @@
+{
+  "name": "sidekick-monorepo",
+  "private": true,
+  "workspaces": [
+    "apps/web-landing",
+    "packages/*"
+  ],
+  "scripts": {
+    "web:serve": "bun --cwd apps/web-landing run serve",
+    "web:build": "bun --cwd apps/web-landing run build",
+    "android:wear:build": "cd apps/android && ./gradlew :wear:assembleDebug",
+    "android:mobile:build": "cd apps/android && ./gradlew :mobile:assembleDebug"
+  }
+}

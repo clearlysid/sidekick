@@ -13,3 +13,9 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Monorepo / web
+**/node_modules
+**/dist
+**/.turbo
+*.log

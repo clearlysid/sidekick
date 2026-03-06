@@ -1,0 +1,97 @@
+:root {
+  color-scheme: light;
+  --bg: #f3f6f8;
+  --surface: #ffffff;
+  --text: #111827;
+  --muted: #4b5563;
+  --primary: #0f766e;
+  --primary-press: #115e59;
+  --line: #d1d5db;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Avenir Next", "Segoe UI", sans-serif;
+  background:
+    radial-gradient(circle at top right, #d1fae5 0%, transparent 28%),
+    radial-gradient(circle at top left, #bae6fd 0%, transparent 22%),
+    var(--bg);
+  color: var(--text);
+}
+
+.page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.hero {
+  max-width: 760px;
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 32px;
+  box-shadow: 0 12px 36px rgba(17, 24, 39, 0.08);
+}
+
+.eyebrow {
+  margin: 0;
+  color: var(--primary);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 12px;
+}
+
+h1 {
+  margin: 12px 0;
+  line-height: 1.05;
+  font-size: clamp(2rem, 6vw, 3.3rem);
+}
+
+.subhead {
+  margin: 0;
+  color: var(--muted);
+  font-size: clamp(1rem, 2.8vw, 1.15rem);
+}
+
+.actions {
+  margin-top: 24px;
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.btn {
+  text-decoration: none;
+  border-radius: 10px;
+  padding: 11px 16px;
+  font-weight: 600;
+}
+
+.btn-primary {
+  background: var(--primary);
+  color: #fff;
+}
+
+.btn-primary:hover {
+  background: var(--primary-press);
+}
+
+.btn-secondary {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--line);
+}
+
+.footnote {
+  margin: 20px 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
