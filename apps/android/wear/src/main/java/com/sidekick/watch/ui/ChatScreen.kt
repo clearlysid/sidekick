@@ -25,10 +25,10 @@ import com.sidekick.watch.viewmodel.MessageRole
 @Composable
 fun ChatScreen(
     uiState: ChatUiState,
+    conversationTitle: String,
     onOpenTextInput: () -> Unit,
     onSendText: () -> Unit,
     onMicClick: () -> Unit,
-    onSettingsClick: () -> Unit,
     onDismissError: () -> Unit,
 ) {
     val listState = rememberTransformingLazyColumnState()
@@ -53,11 +53,11 @@ fun ChatScreen(
             ) {
                 item {
                     Card(
-                        onClick = onSettingsClick,
+                        onClick = {},
                         modifier = Modifier.fillMaxWidth().transformedHeight(this, transformationSpec),
                         transformation = SurfaceTransformation(transformationSpec),
                     ) {
-                        Text("Settings", style = MaterialTheme.typography.bodyMedium)
+                        Text(conversationTitle, style = MaterialTheme.typography.bodyMedium)
                     }
                 }
 

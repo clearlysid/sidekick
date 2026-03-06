@@ -24,10 +24,17 @@ class ChatViewModel(
     private val logTag = "SidekickInput"
     private var micNoiseFloorDb = Float.NaN
 
-    private val _uiState = MutableStateFlow(ChatUiState())
+    private val _uiState =
+        MutableStateFlow(
+            ChatUiState(
+                conversations = INITIAL_CONVERSATIONS,
+                selectedConversationId = INITIAL_CONVERSATIONS.firstOrNull()?.id,
+                messagesByConversation = INITIAL_CONVERSATIONS.associate { it.id to emptyList() },
+                backendConversationIds = INITIAL_CONVERSATIONS.associate { it.id to UUID.randomUUID().toString() },
+            ),
+        )
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
 
-    private val conversationId = UUID.randomUUID().toString()
     private val senderId = "wear-user"
 
     init {
@@ -45,20 +52,39 @@ class ChatViewModel(
         }
     }
 
-    fun openSettings() {
-        _uiState.update {
-            it.copy(
-                screen = Screen.Settings,
-                agentFlavorInput = it.savedSettings.backendId,
-                baseUrlInput = it.savedSettings.baseUrl,
-                authTokenInput = it.savedSettings.authToken,
-                errorMessage = null,
-            )
+    fun openConversation(conversationId: String) {
+        _uiState.update { state ->
+            if (state.conversations.none { it.id == conversationId }) {
+                state
+            } else {
+                state.copy(
+                    selectedConversationId = conversationId,
+                    errorMessage = null,
+                )
+            }
         }
     }
 
-    fun closeSettings() {
-        _uiState.update { it.copy(screen = Screen.Chat) }
+    fun startNewConversation(): String {
+        val newConversation =
+            ConversationSummary(
+                id = "conversation-${UUID.randomUUID().toString().take(8)}",
+                initialPrompt = null,
+                lastUpdatedEpochMs = System.currentTimeMillis(),
+            )
+
+        _uiState.update { state ->
+            state.copy(
+                conversations = listOf(newConversation) + state.conversations,
+                selectedConversationId = newConversation.id,
+                messagesByConversation = state.messagesByConversation + (newConversation.id to emptyList()),
+                draftByConversation = state.draftByConversation + (newConversation.id to ""),
+                backendConversationIds = state.backendConversationIds + (newConversation.id to UUID.randomUUID().toString()),
+                errorMessage = null,
+            )
+        }
+
+        return newConversation.id
     }
 
     fun onBaseUrlChanged(value: String) {
@@ -92,7 +118,41 @@ class ChatViewModel(
         }
     }
 
+    fun saveAgentFlavor(backendId: String) {
+        _uiState.update { state ->
+            val currentBackend = AgentBackends.fromId(state.agentFlavorInput)
+            val nextBackend = AgentBackends.fromId(backendId)
+            val normalizedBaseUrl = state.baseUrlInput.trim().trimEnd('/')
+            val nextBaseUrl =
+                when {
+                    state.baseUrlInput.isBlank() -> nextBackend.defaultBaseUrl
+                    normalizedBaseUrl == currentBackend.defaultBaseUrl -> nextBackend.defaultBaseUrl
+                    else -> state.baseUrlInput
+                }
+
+            state.copy(
+                agentFlavorInput = nextBackend.id,
+                baseUrlInput = nextBaseUrl,
+            )
+        }
+        persistCurrentSettings()
+    }
+
+    fun saveBaseUrl(baseUrl: String) {
+        _uiState.update { it.copy(baseUrlInput = baseUrl) }
+        persistCurrentSettings()
+    }
+
+    fun saveAuthToken(authToken: String) {
+        _uiState.update { it.copy(authTokenInput = authToken) }
+        persistCurrentSettings()
+    }
+
     fun saveSettings() {
+        persistCurrentSettings()
+    }
+
+    private fun persistCurrentSettings() {
         val state = _uiState.value
         viewModelScope.launch {
             settingsRepository.saveSettings(
@@ -100,7 +160,7 @@ class ChatViewModel(
                 baseUrl = state.baseUrlInput,
                 authToken = state.authTokenInput,
             )
-            _uiState.update { it.copy(screen = Screen.Chat, errorMessage = null) }
+            _uiState.update { it.copy(errorMessage = null) }
         }
     }
 
@@ -156,7 +216,10 @@ class ChatViewModel(
 
     fun onDraftChanged(value: String) {
         Log.d(logTag, "onDraftChanged length=${value.length}")
-        _uiState.update { it.copy(draftMessage = value) }
+        _uiState.update { state ->
+            val conversationId = state.selectedConversationId ?: return@update state
+            state.copy(draftByConversation = state.draftByConversation + (conversationId to value))
+        }
     }
 
     fun sendDraftMessage() {
@@ -171,6 +234,12 @@ class ChatViewModel(
         val state = _uiState.value
         if (state.isSending || state.isPolling) return
 
+        val localConversationId = state.selectedConversationId
+        if (localConversationId == null) {
+            _uiState.update { it.copy(errorMessage = "Choose a conversation first.") }
+            return
+        }
+
         val settings = state.savedSettings
         val backend = AgentBackends.fromId(settings.backendId)
         if (settings.baseUrl.isBlank()) {
@@ -180,13 +249,28 @@ class ChatViewModel(
             return
         }
 
+        val backendConversationId = state.backendConversationIds[localConversationId] ?: UUID.randomUUID().toString()
+        if (!state.backendConversationIds.containsKey(localConversationId)) {
+            _uiState.update {
+                it.copy(backendConversationIds = it.backendConversationIds + (localConversationId to backendConversationId))
+            }
+        }
+
         val userMessage = ChatMessage(role = MessageRole.USER, text = trimmed)
         _uiState.update {
+            val existingMessages = it.messagesByConversation[localConversationId].orEmpty()
             it.copy(
-                messages = it.messages + userMessage,
+                messagesByConversation = it.messagesByConversation + (localConversationId to (existingMessages + userMessage)),
+                conversations =
+                    updateConversationMeta(
+                        conversations = it.conversations,
+                        conversationId = localConversationId,
+                        inputText = trimmed,
+                        allowInitialPromptUpdate = true,
+                    ),
+                draftByConversation = it.draftByConversation + (localConversationId to ""),
                 isSending = true,
                 errorMessage = null,
-                draftMessage = "",
             )
         }
 
@@ -195,7 +279,7 @@ class ChatViewModel(
                 spacebotRepository.sendMessage(
                     baseUrl = settings.baseUrl,
                     authToken = settings.authToken,
-                    conversationId = conversationId,
+                    conversationId = backendConversationId,
                     senderId = senderId,
                     content = trimmed,
                 )
@@ -216,7 +300,7 @@ class ChatViewModel(
                 spacebotRepository.pollReplies(
                     baseUrl = settings.baseUrl,
                     authToken = settings.authToken,
-                    conversationId = conversationId,
+                    conversationId = backendConversationId,
                 )
 
             if (pollResult.isFailure) {
@@ -231,8 +315,21 @@ class ChatViewModel(
 
             val replyMessages = mapSpacebotMessages(pollResult.getOrNull().orEmpty())
             _uiState.update {
+                val existingMessages = it.messagesByConversation[localConversationId].orEmpty()
+                val updatedMessages = if (replyMessages.isEmpty()) existingMessages else existingMessages + replyMessages
+                val latestReply = replyMessages.lastOrNull()?.text.orEmpty()
                 it.copy(
-                    messages = if (replyMessages.isEmpty()) it.messages else it.messages + replyMessages,
+                    messagesByConversation = it.messagesByConversation + (localConversationId to updatedMessages),
+                    conversations =
+                        if (latestReply.isBlank()) it.conversations
+                        else {
+                            updateConversationMeta(
+                                conversations = it.conversations,
+                                conversationId = localConversationId,
+                                inputText = latestReply,
+                                allowInitialPromptUpdate = false,
+                            )
+                        },
                     isPolling = false,
                 )
             }
@@ -269,6 +366,29 @@ class ChatViewModel(
         return mapped
     }
 
+    private fun updateConversationMeta(
+        conversations: List<ConversationSummary>,
+        conversationId: String,
+        inputText: String,
+        allowInitialPromptUpdate: Boolean,
+    ): List<ConversationSummary> {
+        val normalized = inputText.trim().replace("\n", " ")
+        val now = System.currentTimeMillis()
+        return conversations.map { conversation ->
+            if (conversation.id != conversationId) {
+                conversation
+            } else {
+                val nextPrompt =
+                    if (allowInitialPromptUpdate && conversation.initialPrompt.isNullOrBlank()) normalized
+                    else conversation.initialPrompt
+                conversation.copy(
+                    initialPrompt = nextPrompt,
+                    lastUpdatedEpochMs = now,
+                )
+            }
+        }
+    }
+
     class Factory(
         private val settingsRepository: SettingsRepository,
         private val spacebotRepository: SpacebotRepository,
@@ -278,11 +398,34 @@ class ChatViewModel(
             return ChatViewModel(settingsRepository, spacebotRepository) as T
         }
     }
+
+    private companion object {
+        val INITIAL_PROMPTS =
+            listOf(
+                "Summarize yesterday's standup action items",
+                "Draft a quick release note for v1.2",
+                "What did we decide about offline mode?",
+                "Create a test plan for speech recognition",
+                "List follow-ups from the design review",
+            )
+
+        val INITIAL_CONVERSATIONS: List<ConversationSummary> =
+            INITIAL_PROMPTS.mapIndexed { index, prompt ->
+                ConversationSummary(
+                    id = "conversation-${index + 1}",
+                    initialPrompt = prompt,
+                    lastUpdatedEpochMs = System.currentTimeMillis() - (index * 60_000L),
+                )
+            }
+    }
 }
 
 data class ChatUiState(
-    val screen: Screen = Screen.Chat,
-    val messages: List<ChatMessage> = emptyList(),
+    val conversations: List<ConversationSummary> = emptyList(),
+    val selectedConversationId: String? = null,
+    val messagesByConversation: Map<String, List<ChatMessage>> = emptyMap(),
+    val draftByConversation: Map<String, String> = emptyMap(),
+    val backendConversationIds: Map<String, String> = emptyMap(),
     val savedSettings: AgentSettings = AgentSettings(),
     val agentFlavorInput: String = "",
     val baseUrlInput: String = "",
@@ -295,7 +438,6 @@ data class ChatUiState(
     val micPeakLevel: Float = 0f,
     val micRawDb: Float = 0f,
     val isVoiceDetected: Boolean = false,
-    val draftMessage: String = "",
     val errorMessage: String? = null,
 ) {
     val selectedAgentFlavorName: String
@@ -303,7 +445,25 @@ data class ChatUiState(
 
     val activeAgentName: String
         get() = AgentBackends.fromId(savedSettings.backendId).displayName
+
+    val currentConversation: ConversationSummary?
+        get() = conversations.firstOrNull { it.id == selectedConversationId }
+
+    val currentConversationTitle: String
+        get() = currentConversation?.initialPrompt?.take(40)?.ifBlank { "New conversation" } ?: "Conversation"
+
+    val messages: List<ChatMessage>
+        get() = selectedConversationId?.let { messagesByConversation[it].orEmpty() }.orEmpty()
+
+    val draftMessage: String
+        get() = selectedConversationId?.let { draftByConversation[it].orEmpty() }.orEmpty()
 }
+
+data class ConversationSummary(
+    val id: String,
+    val initialPrompt: String?,
+    val lastUpdatedEpochMs: Long,
+)
 
 data class ChatMessage(
     val id: String = UUID.randomUUID().toString(),
@@ -314,9 +474,4 @@ data class ChatMessage(
 enum class MessageRole {
     USER,
     BOT,
-}
-
-enum class Screen {
-    Chat,
-    Settings,
 }

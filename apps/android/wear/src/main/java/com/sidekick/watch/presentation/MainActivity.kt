@@ -14,6 +14,19 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.navigation.NavType
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.wear.input.RemoteInputIntentHelper
@@ -21,9 +34,9 @@ import com.sidekick.watch.data.SettingsRepository
 import com.sidekick.watch.data.SpacebotRepository
 import com.sidekick.watch.presentation.theme.SidekickTheme
 import com.sidekick.watch.ui.ChatScreen
+import com.sidekick.watch.ui.HomeScreen
 import com.sidekick.watch.ui.SettingsScreen
 import com.sidekick.watch.viewmodel.ChatViewModel
-import com.sidekick.watch.viewmodel.Screen
 import java.util.Locale
 import okhttp3.OkHttpClient
 
@@ -45,6 +58,7 @@ class MainActivity : ComponentActivity() {
     private var pendingSpeechResult: ((String) -> Unit)? = null
     private var isSpeechSessionActive = false
     private var hasRetriedAfterClientError = false
+    private var requestedHomePage by mutableStateOf(false)
 
     private val requestAudioPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -74,33 +88,75 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val uiState = viewModel.uiState.collectAsStateWithLifecycle().value
+            val pagerState = rememberPagerState(initialPage = HOME_PAGE, pageCount = { PAGE_COUNT })
+            val homeNavController = rememberNavController()
+
+            LaunchedEffect(requestedHomePage) {
+                if (requestedHomePage) {
+                    pagerState.animateScrollToPage(HOME_PAGE)
+                    homeNavController.navigate(HOME_LIST_ROUTE) {
+                        popUpTo(HOME_LIST_ROUTE) { inclusive = false }
+                        launchSingleTop = true
+                    }
+                    requestedHomePage = false
+                }
+            }
 
             SidekickTheme {
-                when (uiState.screen) {
-                    Screen.Chat -> {
-                        ChatScreen(
-                            uiState = uiState,
-                            onOpenTextInput = ::launchRemoteTextInput,
-                            onSendText = viewModel::sendDraftMessage,
-                            onMicClick = {
-                                pendingSpeechResult = viewModel::onVoiceTextReceived
-                                startSpeechCapture()
-                            },
-                            onSettingsClick = viewModel::openSettings,
-                            onDismissError = viewModel::clearError,
-                        )
-                    }
-
-                    Screen.Settings -> {
+                HorizontalPager(
+                    state = pagerState,
+                    modifier = Modifier.fillMaxSize(),
+                ) { page ->
+                    if (page == HOME_PAGE) {
+                        NavHost(
+                            navController = homeNavController,
+                            startDestination = HOME_LIST_ROUTE,
+                        ) {
+                            composable(HOME_LIST_ROUTE) {
+                                HomeScreen(
+                                    conversations = uiState.conversations,
+                                    onNewConversation = {
+                                        val newId = viewModel.startNewConversation()
+                                        homeNavController.navigate("$HOME_CONVERSATION_ROUTE/$newId")
+                                    },
+                                    onOpenConversation = { conversationId ->
+                                        viewModel.openConversation(conversationId)
+                                        homeNavController.navigate("$HOME_CONVERSATION_ROUTE/$conversationId")
+                                    },
+                                )
+                            }
+                            composable(
+                                route = "$HOME_CONVERSATION_ROUTE/{conversationId}",
+                                arguments = listOf(navArgument("conversationId") { type = NavType.StringType }),
+                            ) { backStackEntry ->
+                                val conversationId = backStackEntry.arguments?.getString("conversationId").orEmpty()
+                                LaunchedEffect(conversationId) {
+                                    if (conversationId.isNotBlank()) {
+                                        viewModel.openConversation(conversationId)
+                                    }
+                                }
+                                ChatScreen(
+                                    uiState = uiState,
+                                    conversationTitle = uiState.currentConversationTitle,
+                                    onOpenTextInput = ::launchRemoteTextInput,
+                                    onSendText = viewModel::sendDraftMessage,
+                                    onMicClick = {
+                                        pendingSpeechResult = viewModel::onVoiceTextReceived
+                                        startSpeechCapture()
+                                    },
+                                    onDismissError = viewModel::clearError,
+                                )
+                            }
+                        }
+                    } else {
                         SettingsScreen(
-                            agentFlavor = uiState.selectedAgentFlavorName,
+                            selectedAgentFlavorId = uiState.agentFlavorInput,
+                            selectedAgentFlavorName = uiState.selectedAgentFlavorName,
                             baseUrl = uiState.baseUrlInput,
                             authToken = uiState.authTokenInput,
-                            onAgentFlavorClick = viewModel::cycleAgentFlavor,
-                            onBaseUrlChange = viewModel::onBaseUrlChanged,
-                            onAuthTokenChange = viewModel::onAuthTokenChanged,
-                            onSave = viewModel::saveSettings,
-                            onBack = viewModel::closeSettings,
+                            onSaveAgentFlavor = viewModel::saveAgentFlavor,
+                            onSaveBaseUrl = viewModel::saveBaseUrl,
+                            onSaveAuthToken = viewModel::saveAuthToken,
                         )
                     }
                 }
@@ -277,7 +333,7 @@ class MainActivity : ComponentActivity() {
 
     private fun handleAssistIntent(intent: Intent?) {
         if (intent?.action == Intent.ACTION_ASSIST) {
-            viewModel.closeSettings()
+            requestedHomePage = true
         }
     }
 
@@ -307,5 +363,10 @@ class MainActivity : ComponentActivity() {
 
     private companion object {
         const val CHAT_TEXT_RESULT_KEY = "chat_text_input"
+        const val HOME_PAGE = 0
+        const val SETTINGS_PAGE = 1
+        const val PAGE_COUNT = 2
+        const val HOME_LIST_ROUTE = "home/list"
+        const val HOME_CONVERSATION_ROUTE = "home/conversation"
     }
 }
