@@ -1,14 +1,11 @@
 # Sidekick Monorepo
 
-A single repository for Sidekick apps across platforms.
+A single repository for Sidekick apps.
 
 ## What Is Here
 
 - `apps/android` - Android project (Wear app + phone app)
 - `apps/web-landing` - static landing page built/served with Bun
-- `apps/apple` - placeholders for future iOS/watchOS apps
-- `packages` - shared contracts/assets (placeholders)
-- `tooling` - local scripts/utilities
 
 ## Repo Shape
 
@@ -18,36 +15,23 @@ sidekick/
 |   |-- android/
 |   |   |-- mobile/
 |   |   `-- wear/
-|   |-- web-landing/
-|   `-- apple/
-|       |-- ios/
-|       `-- watchos/
-|-- packages/
-|   |-- shared-contracts/
-|   `-- shared-assets/
-|-- tooling/
-|   `-- scripts/
+|   `-- web-landing/
 |-- package.json
+|-- bun.lock
 `-- README.md
 ```
 
 ## Platform Relationship
 
 ```text
-                +-------------------+
-                |  apps/web-landing |
-                |   static website  |
-                +---------+---------+
-                          |
-                          v
-+-------------------+   Sidekick   +----------------------+
++-------------------+              +----------------------+
 | apps/android/wear | <----------> | apps/android/mobile  |
-| primary product   |              | companion (minimal)  |
+| primary app       |              | companion (minimal)  |
 +-------------------+              +----------------------+
 
 +-------------------+
-| apps/apple/*      |
-| reserved/future   |
+| apps/web-landing  |
+| static website    |
 +-------------------+
 ```
 

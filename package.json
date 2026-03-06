@@ -2,8 +2,7 @@
   "name": "sidekick-monorepo",
   "private": true,
   "workspaces": [
-    "apps/web-landing",
-    "packages/*"
+    "apps/web-landing"
   ],
   "scripts": {
     "web:serve": "bun --cwd apps/web-landing run serve",
