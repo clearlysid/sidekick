@@ -3,6 +3,7 @@ package com.sidekick.watch.presentation
 import android.content.Intent
 import android.os.Bundle
 import android.app.RemoteInput
+import android.speech.RecognizerIntent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult
@@ -29,6 +30,7 @@ import com.sidekick.watch.ui.ChatScreen
 import com.sidekick.watch.ui.HomeScreen
 import com.sidekick.watch.ui.SettingsScreen
 import com.sidekick.watch.viewmodel.ChatViewModel
+import java.util.Locale
 import okhttp3.OkHttpClient
 
 class MainActivity : ComponentActivity() {
@@ -54,15 +56,25 @@ class MainActivity : ComponentActivity() {
             val enteredText = results.getCharSequence(CHAT_TEXT_RESULT_KEY)?.toString().orEmpty().trim()
             if (enteredText.isNotEmpty()) {
                 if (shouldCreateConversationAfterComposer) {
-                    val targetConversationId = viewModel.startNewConversation()
-                    viewModel.openConversation(targetConversationId)
-                    requestedConversationPageId = targetConversationId
-                    viewModel.sendMessage(enteredText)
+                    startFreshConversationFromInput(enteredText)
                 } else {
                     viewModel.sendMessage(enteredText)
                 }
             }
             shouldCreateConversationAfterComposer = false
+        }
+
+    private val voiceInputLauncher =
+        registerForActivityResult(StartActivityForResult()) { result ->
+            val spokenText =
+                result.data
+                    ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+                    ?.firstOrNull()
+                    .orEmpty()
+                    .trim()
+            if (spokenText.isNotEmpty()) {
+                startFreshConversationFromInput(spokenText)
+            }
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -107,10 +119,11 @@ class MainActivity : ComponentActivity() {
                             composable(HOME_LIST_ROUTE) {
                                 HomeScreen(
                                     conversations = uiState.conversations,
-                                    onNewConversation = {
+                                    onNewConversationWithKeyboard = {
                                         shouldCreateConversationAfterComposer = true
                                         launchRemoteTextInput()
                                     },
+                                    onNewConversationWithVoice = ::launchVoiceInput,
                                     onOpenConversation = { conversationId ->
                                         viewModel.openConversation(conversationId)
                                         homeNavController.navigate("$HOME_CONVERSATION_ROUTE/$conversationId")
@@ -171,6 +184,29 @@ class MainActivity : ComponentActivity() {
             RemoteInputIntentHelper.putConfirmLabelExtra(this, "Done")
         }
         textInputLauncher.launch(intent)
+    }
+
+    private fun launchVoiceInput() {
+        val voiceIntent =
+            Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault().toLanguageTag())
+                putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak message")
+            }
+        if (voiceIntent.resolveActivity(packageManager) != null) {
+            voiceInputLauncher.launch(voiceIntent)
+        } else {
+            shouldCreateConversationAfterComposer = true
+            launchRemoteTextInput()
+        }
+    }
+
+    private fun startFreshConversationFromInput(inputText: String) {
+        val targetConversationId = viewModel.startNewConversation()
+        viewModel.openConversation(targetConversationId)
+        requestedConversationPageId = targetConversationId
+        viewModel.sendMessage(inputText)
     }
 
     private companion object {

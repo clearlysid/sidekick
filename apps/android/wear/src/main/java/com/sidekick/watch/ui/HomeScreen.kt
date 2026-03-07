@@ -2,9 +2,12 @@ package com.sidekick.watch.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.material.icons.rounded.Add
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Keyboard
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -37,7 +40,8 @@ import java.time.format.DateTimeFormatter
 @Composable
 fun HomeScreen(
     conversations: List<ConversationSummary>,
-    onNewConversation: () -> Unit,
+    onNewConversationWithKeyboard: () -> Unit,
+    onNewConversationWithVoice: () -> Unit,
     onOpenConversation: (String) -> Unit,
     loadMoreIncrement: Int,
 ) {
@@ -84,20 +88,26 @@ fun HomeScreen(
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
-                            text = "Hello",
+                            text = "Hello!",
                             style = MaterialTheme.typography.titleSmall,
                             textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(top = 8.dp),
                         )
                     }
                 }
 
                 item {
-                    Box(
-                        modifier = Modifier.fillMaxWidth().transformedHeight(this, transformationSpec),
-                        contentAlignment = Alignment.Center,
+                    Row(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 6.dp)
+                                .transformedHeight(this, transformationSpec),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
                         FilledIconButton(
-                            onClick = onNewConversation,
+                            onClick = onNewConversationWithKeyboard,
                             colors =
                                 IconButtonDefaults.filledIconButtonColors(
                                     containerColor = MaterialTheme.colorScheme.primary,
@@ -105,8 +115,21 @@ fun HomeScreen(
                                 ),
                         ) {
                             Icon(
-                                imageVector = Icons.Rounded.Add,
-                                contentDescription = "New conversation",
+                                imageVector = Icons.Filled.Keyboard,
+                                contentDescription = "New conversation (keyboard)",
+                            )
+                        }
+                        FilledIconButton(
+                            onClick = onNewConversationWithVoice,
+                            colors =
+                                IconButtonDefaults.filledIconButtonColors(
+                                    containerColor = MaterialTheme.colorScheme.primary,
+                                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                                ),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Mic,
+                                contentDescription = "New conversation (voice)",
                             )
                         }
                     }

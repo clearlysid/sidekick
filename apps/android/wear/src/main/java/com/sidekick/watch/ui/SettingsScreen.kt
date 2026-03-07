@@ -72,6 +72,7 @@ fun SettingsScreen(
                         Text(
                             text = "Settings",
                             style = MaterialTheme.typography.titleSmall,
+                            modifier = Modifier.padding(top = 8.dp),
                         )
                     }
                 }
