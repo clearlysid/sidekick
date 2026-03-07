@@ -32,10 +32,10 @@ class ChatViewModel(
     private val _uiState =
         MutableStateFlow(
             ChatUiState(
-                conversations = INITIAL_CONVERSATIONS,
-                selectedConversationId = INITIAL_CONVERSATIONS.firstOrNull()?.id,
-                messagesByConversation = INITIAL_CONVERSATIONS.associate { it.id to emptyList() },
-                backendConversationIds = INITIAL_CONVERSATIONS.associate { it.id to UUID.randomUUID().toString() },
+                conversations = emptyList(),
+                selectedConversationId = null,
+                messagesByConversation = emptyMap(),
+                backendConversationIds = emptyMap(),
             ),
         )
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
@@ -359,25 +359,6 @@ class ChatViewModel(
         }
     }
 
-    private companion object {
-        val INITIAL_PROMPTS =
-            listOf(
-                "Summarize yesterday's standup action items",
-                "Draft a quick release note for v1.2",
-                "What did we decide about offline mode?",
-                "Create a test plan for speech recognition",
-                "List follow-ups from the design review",
-            )
-
-        val INITIAL_CONVERSATIONS: List<ConversationSummary> =
-            INITIAL_PROMPTS.mapIndexed { index, prompt ->
-                ConversationSummary(
-                    id = "conversation-${index + 1}",
-                    initialPrompt = prompt,
-                    lastUpdatedEpochMs = System.currentTimeMillis() - (index * 60_000L),
-                )
-            }
-    }
 }
 
 private fun ChatUiState.toPersistedConversationState(): PersistedConversationState =

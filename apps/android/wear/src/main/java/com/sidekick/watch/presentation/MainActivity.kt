@@ -115,6 +115,7 @@ class MainActivity : ComponentActivity() {
                                         viewModel.openConversation(conversationId)
                                         homeNavController.navigate("$HOME_CONVERSATION_ROUTE/$conversationId")
                                     },
+                                    loadMoreIncrement = HOME_CONVERSATIONS_PAGE_INCREMENT,
                                 )
                             }
                             composable(
@@ -178,5 +179,6 @@ class MainActivity : ComponentActivity() {
         const val PAGE_COUNT = 2
         const val HOME_LIST_ROUTE = "home/list"
         const val HOME_CONVERSATION_ROUTE = "home/conversation"
+        const val HOME_CONVERSATIONS_PAGE_INCREMENT = 5
     }
 }
