@@ -13,7 +13,6 @@ import com.sidekick.watch.data.SettingsRepository
 import com.sidekick.watch.data.SpacebotMessage
 import com.sidekick.watch.data.SpacebotRepository
 import java.util.UUID
-import kotlin.math.max
 import java.net.ConnectException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
@@ -29,7 +28,6 @@ class ChatViewModel(
     private val spacebotRepository: SpacebotRepository,
 ) : ViewModel() {
     private val logTag = "SidekickInput"
-    private var micNoiseFloorDb = Float.NaN
 
     private val _uiState =
         MutableStateFlow(
@@ -107,37 +105,6 @@ class ChatViewModel(
         return newConversation.id
     }
 
-    fun onBaseUrlChanged(value: String) {
-        Log.d(logTag, "onBaseUrlChanged length=${value.length}")
-        _uiState.update { it.copy(baseUrlInput = value) }
-    }
-
-    fun onAuthTokenChanged(value: String) {
-        Log.d(logTag, "onAuthTokenChanged length=${value.length}")
-        _uiState.update { it.copy(authTokenInput = value) }
-    }
-
-    fun cycleAgentFlavor() {
-        _uiState.update { state ->
-            val all = AgentBackends.supported
-            val currentIndex = all.indexOfFirst { it.id == state.agentFlavorInput }.coerceAtLeast(0)
-            val next = all[(currentIndex + 1) % all.size]
-            val current = AgentBackends.fromId(state.agentFlavorInput)
-            val normalizedInputBaseUrl = state.baseUrlInput.trim().trimEnd('/')
-            val nextBaseUrl =
-                when {
-                    state.baseUrlInput.isBlank() -> next.defaultBaseUrl
-                    normalizedInputBaseUrl == current.defaultBaseUrl -> next.defaultBaseUrl
-                    else -> state.baseUrlInput
-                }
-
-            state.copy(
-                agentFlavorInput = next.id,
-                baseUrlInput = nextBaseUrl,
-            )
-        }
-    }
-
     fun saveAgentFlavor(backendId: String) {
         _uiState.update { state ->
             val currentBackend = AgentBackends.fromId(state.agentFlavorInput)
@@ -168,10 +135,6 @@ class ChatViewModel(
         persistCurrentSettings()
     }
 
-    fun saveSettings() {
-        persistCurrentSettings()
-    }
-
     private fun persistCurrentSettings() {
         val state = _uiState.value
         viewModelScope.launch {
@@ -186,52 +149,6 @@ class ChatViewModel(
 
     fun clearError() {
         _uiState.update { it.copy(errorMessage = null) }
-    }
-
-    fun showError(message: String) {
-        _uiState.update { it.copy(errorMessage = message) }
-    }
-
-    fun setListening(isListening: Boolean) {
-        _uiState.update {
-            it.copy(
-                isListening = isListening,
-                liveTranscript = if (isListening) it.liveTranscript else "",
-                micLevel = if (isListening) it.micLevel else 0f,
-                micPeakLevel = if (isListening) it.micPeakLevel else 0f,
-                micRawDb = if (isListening) it.micRawDb else 0f,
-                isVoiceDetected = if (isListening) it.isVoiceDetected else false,
-            )
-        }
-        if (!isListening) {
-            micNoiseFloorDb = Float.NaN
-        }
-    }
-
-    fun updateLiveTranscript(value: String) {
-        _uiState.update { it.copy(liveTranscript = value) }
-    }
-
-    fun updateMicLevel(rmsDb: Float) {
-        val clamped = rmsDb.coerceIn(-2f, 12f)
-        micNoiseFloorDb =
-            if (micNoiseFloorDb.isNaN()) clamped else (micNoiseFloorDb * 0.92f) + (clamped * 0.08f)
-
-        val voiceDetected = clamped > micNoiseFloorDb + 1.5f
-        val normalized = ((clamped - micNoiseFloorDb + 2f) / 8f).coerceIn(0f, 1f)
-
-        _uiState.update {
-            it.copy(
-                micRawDb = clamped,
-                micLevel = normalized,
-                micPeakLevel = max(normalized, it.micPeakLevel * 0.9f),
-                isVoiceDetected = voiceDetected,
-            )
-        }
-    }
-
-    fun onVoiceTextReceived(text: String) {
-        sendMessage(text)
     }
 
     fun sendMessage(content: String) {
@@ -515,12 +432,6 @@ data class ChatUiState(
     val authTokenInput: String = "",
     val isSending: Boolean = false,
     val isPolling: Boolean = false,
-    val isListening: Boolean = false,
-    val liveTranscript: String = "",
-    val micLevel: Float = 0f,
-    val micPeakLevel: Float = 0f,
-    val micRawDb: Float = 0f,
-    val isVoiceDetected: Boolean = false,
     val errorMessage: String? = null,
 ) {
     val selectedAgentFlavorName: String

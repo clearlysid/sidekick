@@ -111,21 +111,6 @@ fun ChatScreen(
                     }
                 }
 
-                if (uiState.isListening) {
-                    item {
-                        Card(
-                            onClick = {},
-                            modifier = Modifier.fillMaxWidth().transformedHeight(this, transformationSpec),
-                            transformation = SurfaceTransformation(transformationSpec),
-                        ) {
-                            Text("Listening...", style = MaterialTheme.typography.bodySmall)
-                            if (uiState.liveTranscript.isNotBlank()) {
-                                Text(uiState.liveTranscript, style = MaterialTheme.typography.bodySmall)
-                            }
-                        }
-                    }
-                }
-
                 uiState.errorMessage?.let { error ->
                     item {
                         Card(
