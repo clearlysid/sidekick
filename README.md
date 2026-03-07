@@ -62,3 +62,17 @@ bun run web:serve
 bun run android:wear:build
 bun run android:mobile:build
 ```
+
+## Deploy Web Landing to GitHub Pages
+
+The repo includes a workflow at `.github/workflows/deploy-web-landing.yml` that:
+- builds `apps/web-landing/dist`
+- deploys to GitHub Pages on pushes to `main`
+- writes a `CNAME` file for `sidekick.watch`
+
+### One-time GitHub setup
+
+1. Push this repo to GitHub.
+2. In GitHub: `Settings -> Pages`
+3. Under `Source`, select `GitHub Actions`.
+4. In `Settings -> Environments -> github-pages`, approve deploy protections if required.

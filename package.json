@@ -5,8 +5,8 @@
     "apps/web-landing"
   ],
   "scripts": {
-    "web:serve": "bun --cwd apps/web-landing run serve",
-    "web:build": "bun --cwd apps/web-landing run build",
+    "web:serve": "bun run --cwd apps/web-landing serve",
+    "web:build": "bun run --cwd apps/web-landing build",
     "android:wear:build": "cd apps/android && ./gradlew :wear:assembleDebug",
     "android:mobile:build": "cd apps/android && ./gradlew :mobile:assembleDebug"
   }
