@@ -6,6 +6,9 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.sidekick.watch.data.AgentBackends
 import com.sidekick.watch.data.AgentSettings
+import com.sidekick.watch.data.PersistedChatMessage
+import com.sidekick.watch.data.PersistedConversationState
+import com.sidekick.watch.data.PersistedConversationSummary
 import com.sidekick.watch.data.SettingsRepository
 import com.sidekick.watch.data.SpacebotMessage
 import com.sidekick.watch.data.SpacebotRepository
@@ -54,6 +57,18 @@ class ChatViewModel(
                 }
             }
         }
+
+        viewModelScope.launch {
+            val persisted = settingsRepository.loadConversationState() ?: return@launch
+            _uiState.update { state ->
+                state.copy(
+                    conversations = persisted.conversations.map { it.toConversationSummary() },
+                    selectedConversationId = persisted.selectedConversationId ?: persisted.conversations.firstOrNull()?.id,
+                    messagesByConversation = persisted.messagesByConversation.mapValues { (_, messages) -> messages.mapNotNull { it.toChatMessageOrNull() } },
+                    backendConversationIds = persisted.backendConversationIds,
+                )
+            }
+        }
     }
 
     fun openConversation(conversationId: String) {
@@ -67,6 +82,7 @@ class ChatViewModel(
                 )
             }
         }
+        persistConversationState()
     }
 
     fun startNewConversation(): String {
@@ -86,6 +102,7 @@ class ChatViewModel(
                 errorMessage = null,
             )
         }
+        persistConversationState()
 
         return newConversation.id
     }
@@ -263,6 +280,7 @@ class ChatViewModel(
                 errorMessage = null,
             )
         }
+        persistConversationState()
 
         viewModelScope.launch {
             val sendResult =
@@ -281,6 +299,7 @@ class ChatViewModel(
                         errorMessage = formatNetworkError(sendResult.exceptionOrNull(), "send"),
                     )
                 }
+                persistConversationState()
                 return@launch
             }
 
@@ -300,6 +319,7 @@ class ChatViewModel(
                         errorMessage = formatNetworkError(pollResult.exceptionOrNull(), "poll"),
                     )
                 }
+                persistConversationState()
                 return@launch
             }
 
@@ -323,6 +343,14 @@ class ChatViewModel(
                     isPolling = false,
                 )
             }
+            persistConversationState()
+        }
+    }
+
+    private fun persistConversationState() {
+        val state = _uiState.value
+        viewModelScope.launch {
+            settingsRepository.saveConversationState(state.toPersistedConversationState())
         }
     }
 
@@ -433,6 +461,47 @@ class ChatViewModel(
                 )
             }
     }
+}
+
+private fun ChatUiState.toPersistedConversationState(): PersistedConversationState =
+    PersistedConversationState(
+        selectedConversationId = selectedConversationId,
+        conversations = conversations.map { it.toPersistedConversationSummary() },
+        messagesByConversation =
+            messagesByConversation.mapValues { (_, messages) ->
+                messages.map { it.toPersistedChatMessage() }
+            },
+        backendConversationIds = backendConversationIds,
+    )
+
+private fun ConversationSummary.toPersistedConversationSummary(): PersistedConversationSummary =
+    PersistedConversationSummary(
+        id = id,
+        initialPrompt = initialPrompt,
+        lastUpdatedEpochMs = lastUpdatedEpochMs,
+    )
+
+private fun PersistedConversationSummary.toConversationSummary(): ConversationSummary =
+    ConversationSummary(
+        id = id,
+        initialPrompt = initialPrompt,
+        lastUpdatedEpochMs = lastUpdatedEpochMs,
+    )
+
+private fun ChatMessage.toPersistedChatMessage(): PersistedChatMessage =
+    PersistedChatMessage(
+        id = id,
+        role = role.name,
+        text = text,
+    )
+
+private fun PersistedChatMessage.toChatMessageOrNull(): ChatMessage? {
+    val parsedRole = MessageRole.entries.firstOrNull { it.name == role } ?: return null
+    return ChatMessage(
+        id = id,
+        role = parsedRole,
+        text = text,
+    )
 }
 
 data class ChatUiState(
