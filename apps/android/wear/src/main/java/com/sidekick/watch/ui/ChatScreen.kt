@@ -1,16 +1,23 @@
 package com.sidekick.watch.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Create
+import androidx.compose.material.icons.filled.Add
 import androidx.wear.compose.foundation.lazy.TransformingLazyColumn
 import androidx.wear.compose.foundation.lazy.rememberTransformingLazyColumnState
 import androidx.wear.compose.material3.AppScaffold
 import androidx.wear.compose.material3.Card
+import androidx.wear.compose.material3.CircularProgressIndicator
 import androidx.wear.compose.material3.EdgeButton
 import androidx.wear.compose.material3.Icon
 import androidx.wear.compose.material3.MaterialTheme
@@ -27,12 +34,11 @@ fun ChatScreen(
     uiState: ChatUiState,
     conversationTitle: String,
     onOpenTextInput: () -> Unit,
-    onSendText: () -> Unit,
-    onMicClick: () -> Unit,
     onDismissError: () -> Unit,
 ) {
     val listState = rememberTransformingLazyColumnState()
     val transformationSpec = rememberTransformationSpec()
+    val compactMessagePadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
 
     AppScaffold {
         ScreenScaffold(
@@ -40,7 +46,7 @@ fun ChatScreen(
             edgeButton = {
                 EdgeButton(onClick = onOpenTextInput) {
                     Icon(
-                        imageVector = Icons.Filled.Create,
+                        imageVector = Icons.Filled.Add,
                         contentDescription = "Compose",
                     )
                 }
@@ -49,73 +55,57 @@ fun ChatScreen(
             TransformingLazyColumn(
                 state = listState,
                 contentPadding = contentPadding,
-                verticalArrangement = Arrangement.spacedBy(4.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 item {
-                    Card(
-                        onClick = {},
+                    Box(
                         modifier = Modifier.fillMaxWidth().transformedHeight(this, transformationSpec),
-                        transformation = SurfaceTransformation(transformationSpec),
+                        contentAlignment = Alignment.Center,
                     ) {
-                        Text(conversationTitle, style = MaterialTheme.typography.bodyMedium)
-                    }
-                }
-
-                if (uiState.messages.isEmpty()) {
-                    item {
-                        Card(
-                            onClick = onMicClick,
-                            modifier = Modifier.fillMaxWidth().transformedHeight(this, transformationSpec),
-                            transformation = SurfaceTransformation(transformationSpec),
-                        ) {
-                            Text("No messages yet", style = MaterialTheme.typography.bodySmall)
-                            Text("Tap mic or compose", style = MaterialTheme.typography.labelSmall)
-                        }
-                    }
-                }
-
-                if (uiState.draftMessage.isNotBlank()) {
-                    item {
-                        Card(
-                            onClick = onSendText,
-                            modifier = Modifier.fillMaxWidth().transformedHeight(this, transformationSpec),
-                            transformation = SurfaceTransformation(transformationSpec),
-                        ) {
-                            Text("Draft", style = MaterialTheme.typography.labelSmall)
-                            Text(uiState.draftMessage, style = MaterialTheme.typography.bodySmall)
-                            Text("Tap to send", style = MaterialTheme.typography.labelSmall)
-                        }
+                        Text(
+                            text = conversationTitle,
+                            style = MaterialTheme.typography.bodySmall,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(vertical = 6.dp),
+                        )
                     }
                 }
 
                 uiState.messages.forEach { message ->
                     item {
-                        val isUser = message.role == MessageRole.USER
-                        Card(
-                            onClick = {},
-                            modifier = Modifier.fillMaxWidth().transformedHeight(this, transformationSpec),
-                            transformation = SurfaceTransformation(transformationSpec),
-                        ) {
+                        if (message.role == MessageRole.USER) {
+                            Card(
+                                onClick = {},
+                                modifier = Modifier.fillMaxWidth(),
+                                contentPadding = compactMessagePadding,
+                                transformation = SurfaceTransformation(transformationSpec),
+                            ) {
+                                Text(
+                                    text = message.text,
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                            }
+                        } else {
                             Text(
-                                text = if (isUser) "You" else uiState.activeAgentName,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = if (isUser) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary,
+                                text = message.text,
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 8.dp, vertical = 2.dp),
                             )
-                            Text(message.text, style = MaterialTheme.typography.bodySmall)
                         }
                     }
                 }
 
                 if (uiState.isSending || uiState.isPolling) {
                     item {
-                        Card(
-                            onClick = {},
+                        Box(
                             modifier = Modifier.fillMaxWidth().transformedHeight(this, transformationSpec),
-                            transformation = SurfaceTransformation(transformationSpec),
+                            contentAlignment = Alignment.Center,
                         ) {
-                            Text(
-                                text = if (uiState.isSending) "Sending..." else "Waiting for reply...",
-                                style = MaterialTheme.typography.bodySmall,
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
                             )
                         }
                     }

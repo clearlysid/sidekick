@@ -11,6 +11,10 @@ import com.sidekick.watch.data.SpacebotMessage
 import com.sidekick.watch.data.SpacebotRepository
 import java.util.UUID
 import kotlin.math.max
+import java.net.ConnectException
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
+import javax.net.ssl.SSLException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -78,7 +82,6 @@ class ChatViewModel(
                 conversations = listOf(newConversation) + state.conversations,
                 selectedConversationId = newConversation.id,
                 messagesByConversation = state.messagesByConversation + (newConversation.id to emptyList()),
-                draftByConversation = state.draftByConversation + (newConversation.id to ""),
                 backendConversationIds = state.backendConversationIds + (newConversation.id to UUID.randomUUID().toString()),
                 errorMessage = null,
             )
@@ -214,19 +217,6 @@ class ChatViewModel(
         sendMessage(text)
     }
 
-    fun onDraftChanged(value: String) {
-        Log.d(logTag, "onDraftChanged length=${value.length}")
-        _uiState.update { state ->
-            val conversationId = state.selectedConversationId ?: return@update state
-            state.copy(draftByConversation = state.draftByConversation + (conversationId to value))
-        }
-    }
-
-    fun sendDraftMessage() {
-        val draft = _uiState.value.draftMessage
-        sendMessage(draft)
-    }
-
     fun sendMessage(content: String) {
         val trimmed = content.trim()
         if (trimmed.isEmpty()) return
@@ -242,6 +232,7 @@ class ChatViewModel(
 
         val settings = state.savedSettings
         val backend = AgentBackends.fromId(settings.backendId)
+        Log.i(logTag, "Using backend=${backend.id} baseUrl=${settings.baseUrl}")
         if (settings.baseUrl.isBlank()) {
             _uiState.update {
                 it.copy(errorMessage = "Set ${backend.displayName} URL in Settings first.")
@@ -268,7 +259,6 @@ class ChatViewModel(
                         inputText = trimmed,
                         allowInitialPromptUpdate = true,
                     ),
-                draftByConversation = it.draftByConversation + (localConversationId to ""),
                 isSending = true,
                 errorMessage = null,
             )
@@ -288,7 +278,7 @@ class ChatViewModel(
                 _uiState.update {
                     it.copy(
                         isSending = false,
-                        errorMessage = sendResult.exceptionOrNull()?.message ?: "Send failed.",
+                        errorMessage = formatNetworkError(sendResult.exceptionOrNull(), "send"),
                     )
                 }
                 return@launch
@@ -307,7 +297,7 @@ class ChatViewModel(
                 _uiState.update {
                     it.copy(
                         isPolling = false,
-                        errorMessage = pollResult.exceptionOrNull()?.message ?: "Polling failed.",
+                        errorMessage = formatNetworkError(pollResult.exceptionOrNull(), "poll"),
                     )
                 }
                 return@launch
@@ -389,6 +379,31 @@ class ChatViewModel(
         }
     }
 
+    private fun formatNetworkError(error: Throwable?, phase: String): String {
+        val root = rootCause(error)
+        val suffix = if (phase == "send") "while sending" else "while waiting for reply"
+        return when (root) {
+            is UnknownHostException ->
+                "Couldn't resolve server host $suffix. Check the Base URL and network."
+            is ConnectException ->
+                "Couldn't connect to server $suffix. If this is a private/Tailnet host, make sure the watch can reach it."
+            is SocketTimeoutException ->
+                "Server timed out $suffix. Check connectivity and try again."
+            is SSLException ->
+                "TLS/SSL handshake failed $suffix. Check server certificate/HTTPS configuration."
+            else ->
+                error?.message ?: "Request failed $suffix."
+        }
+    }
+
+    private fun rootCause(error: Throwable?): Throwable? {
+        var current = error
+        while (current?.cause != null) {
+            current = current.cause
+        }
+        return current
+    }
+
     class Factory(
         private val settingsRepository: SettingsRepository,
         private val spacebotRepository: SpacebotRepository,
@@ -424,7 +439,6 @@ data class ChatUiState(
     val conversations: List<ConversationSummary> = emptyList(),
     val selectedConversationId: String? = null,
     val messagesByConversation: Map<String, List<ChatMessage>> = emptyMap(),
-    val draftByConversation: Map<String, String> = emptyMap(),
     val backendConversationIds: Map<String, String> = emptyMap(),
     val savedSettings: AgentSettings = AgentSettings(),
     val agentFlavorInput: String = "",
@@ -454,9 +468,6 @@ data class ChatUiState(
 
     val messages: List<ChatMessage>
         get() = selectedConversationId?.let { messagesByConversation[it].orEmpty() }.orEmpty()
-
-    val draftMessage: String
-        get() = selectedConversationId?.let { draftByConversation[it].orEmpty() }.orEmpty()
 }
 
 data class ConversationSummary(

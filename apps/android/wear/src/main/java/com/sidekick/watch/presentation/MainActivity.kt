@@ -59,6 +59,8 @@ class MainActivity : ComponentActivity() {
     private var isSpeechSessionActive = false
     private var hasRetriedAfterClientError = false
     private var requestedHomePage by mutableStateOf(false)
+    private var requestedConversationPageId by mutableStateOf<String?>(null)
+    private var shouldCreateConversationAfterComposer: Boolean = false
 
     private val requestAudioPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -77,8 +79,16 @@ class MainActivity : ComponentActivity() {
             val results = RemoteInput.getResultsFromIntent(data) ?: return@registerForActivityResult
             val enteredText = results.getCharSequence(CHAT_TEXT_RESULT_KEY)?.toString().orEmpty().trim()
             if (enteredText.isNotEmpty()) {
-                viewModel.onDraftChanged(enteredText)
+                if (shouldCreateConversationAfterComposer) {
+                    val targetConversationId = viewModel.startNewConversation()
+                    viewModel.openConversation(targetConversationId)
+                    requestedConversationPageId = targetConversationId
+                    viewModel.sendMessage(enteredText)
+                } else {
+                    viewModel.sendMessage(enteredText)
+                }
             }
+            shouldCreateConversationAfterComposer = false
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -102,6 +112,15 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
+            LaunchedEffect(requestedConversationPageId) {
+                val conversationId = requestedConversationPageId ?: return@LaunchedEffect
+                pagerState.animateScrollToPage(HOME_PAGE)
+                homeNavController.navigate("$HOME_CONVERSATION_ROUTE/$conversationId") {
+                    launchSingleTop = true
+                }
+                requestedConversationPageId = null
+            }
+
             SidekickTheme {
                 HorizontalPager(
                     state = pagerState,
@@ -116,8 +135,8 @@ class MainActivity : ComponentActivity() {
                                 HomeScreen(
                                     conversations = uiState.conversations,
                                     onNewConversation = {
-                                        val newId = viewModel.startNewConversation()
-                                        homeNavController.navigate("$HOME_CONVERSATION_ROUTE/$newId")
+                                        shouldCreateConversationAfterComposer = true
+                                        launchRemoteTextInput()
                                     },
                                     onOpenConversation = { conversationId ->
                                         viewModel.openConversation(conversationId)
@@ -139,11 +158,6 @@ class MainActivity : ComponentActivity() {
                                     uiState = uiState,
                                     conversationTitle = uiState.currentConversationTitle,
                                     onOpenTextInput = ::launchRemoteTextInput,
-                                    onSendText = viewModel::sendDraftMessage,
-                                    onMicClick = {
-                                        pendingSpeechResult = viewModel::onVoiceTextReceived
-                                        startSpeechCapture()
-                                    },
                                     onDismissError = viewModel::clearError,
                                 )
                             }
