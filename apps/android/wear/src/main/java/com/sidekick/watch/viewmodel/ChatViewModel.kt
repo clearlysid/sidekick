@@ -6,12 +6,12 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.sidekick.watch.data.AgentBackends
 import com.sidekick.watch.data.AgentSettings
+import com.sidekick.watch.data.OpenAIMessage
+import com.sidekick.watch.data.OpenAIRepository
 import com.sidekick.watch.data.PersistedChatMessage
 import com.sidekick.watch.data.PersistedConversationState
 import com.sidekick.watch.data.PersistedConversationSummary
 import com.sidekick.watch.data.SettingsRepository
-import com.sidekick.watch.data.SpacebotMessage
-import com.sidekick.watch.data.SpacebotRepository
 import java.util.UUID
 import java.net.ConnectException
 import java.net.SocketTimeoutException
@@ -25,7 +25,7 @@ import kotlinx.coroutines.launch
 
 class ChatViewModel(
     private val settingsRepository: SettingsRepository,
-    private val spacebotRepository: SpacebotRepository,
+    private val openAIRepository: OpenAIRepository,
 ) : ViewModel() {
     private val logTag = "SidekickInput"
 
@@ -39,8 +39,6 @@ class ChatViewModel(
             ),
         )
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
-
-    private val senderId = "wear-user"
 
     init {
         viewModelScope.launch {
@@ -194,69 +192,64 @@ class ChatViewModel(
                         allowInitialPromptUpdate = true,
                     ),
                 isSending = true,
+                isPolling = true,
                 errorMessage = null,
             )
         }
         persistConversationState()
 
         viewModelScope.launch {
-            val sendResult =
-                spacebotRepository.sendMessage(
-                    baseUrl = settings.baseUrl,
-                    authToken = settings.authToken,
-                    conversationId = backendConversationId,
-                    senderId = senderId,
-                    content = trimmed,
+            val currentMessages = _uiState.value.messagesByConversation[localConversationId].orEmpty()
+            val openAIMessages = currentMessages.map { msg ->
+                OpenAIMessage(
+                    role = when (msg.role) {
+                        MessageRole.USER -> "user"
+                        MessageRole.BOT -> "assistant"
+                    },
+                    content = msg.text,
                 )
+            }
 
-            if (sendResult.isFailure) {
+            val result = openAIRepository.sendMessage(
+                baseUrl = settings.baseUrl,
+                authToken = settings.authToken,
+                conversationId = backendConversationId,
+                messages = openAIMessages,
+            )
+
+            if (result.isFailure) {
                 _uiState.update {
                     it.copy(
                         isSending = false,
-                        errorMessage = formatNetworkError(sendResult.exceptionOrNull(), "send"),
-                    )
-                }
-                persistConversationState()
-                return@launch
-            }
-
-            _uiState.update { it.copy(isSending = false, isPolling = true) }
-
-            val pollResult =
-                spacebotRepository.pollReplies(
-                    baseUrl = settings.baseUrl,
-                    authToken = settings.authToken,
-                    conversationId = backendConversationId,
-                )
-
-            if (pollResult.isFailure) {
-                _uiState.update {
-                    it.copy(
                         isPolling = false,
-                        errorMessage = formatNetworkError(pollResult.exceptionOrNull(), "poll"),
+                        errorMessage = formatNetworkError(result.exceptionOrNull(), "send"),
                     )
                 }
                 persistConversationState()
                 return@launch
             }
 
-            val replyMessages = mapSpacebotMessages(pollResult.getOrNull().orEmpty())
+            val replyText = result.getOrDefault("")
             _uiState.update {
                 val existingMessages = it.messagesByConversation[localConversationId].orEmpty()
-                val updatedMessages = if (replyMessages.isEmpty()) existingMessages else existingMessages + replyMessages
-                val latestReply = replyMessages.lastOrNull()?.text.orEmpty()
+                val updatedMessages = if (replyText.isBlank()) {
+                    existingMessages
+                } else {
+                    existingMessages + ChatMessage(role = MessageRole.BOT, text = replyText)
+                }
                 it.copy(
                     messagesByConversation = it.messagesByConversation + (localConversationId to updatedMessages),
                     conversations =
-                        if (latestReply.isBlank()) it.conversations
+                        if (replyText.isBlank()) it.conversations
                         else {
                             updateConversationMeta(
                                 conversations = it.conversations,
                                 conversationId = localConversationId,
-                                inputText = latestReply,
+                                inputText = replyText,
                                 allowInitialPromptUpdate = false,
                             )
                         },
+                    isSending = false,
                     isPolling = false,
                 )
             }
@@ -269,36 +262,6 @@ class ChatViewModel(
         viewModelScope.launch {
             settingsRepository.saveConversationState(state.toPersistedConversationState())
         }
-    }
-
-    private fun mapSpacebotMessages(items: List<SpacebotMessage>): List<ChatMessage> {
-        val mapped = mutableListOf<ChatMessage>()
-        val streamingBuffer = StringBuilder()
-
-        fun flushStreamingBuffer() {
-            if (streamingBuffer.isNotEmpty()) {
-                mapped += ChatMessage(role = MessageRole.BOT, text = streamingBuffer.toString())
-                streamingBuffer.clear()
-            }
-        }
-
-        for (item in items) {
-            when (item.type) {
-                SpacebotRepository.TYPE_STREAM_CHUNK -> streamingBuffer.append(item.content)
-                SpacebotRepository.TYPE_STREAM_END -> flushStreamingBuffer()
-                SpacebotRepository.TYPE_TEXT,
-                SpacebotRepository.TYPE_FILE,
-                -> {
-                    flushStreamingBuffer()
-                    if (item.content.isNotBlank()) {
-                        mapped += ChatMessage(role = MessageRole.BOT, text = item.content)
-                    }
-                }
-            }
-        }
-
-        flushStreamingBuffer()
-        return mapped
     }
 
     private fun updateConversationMeta(
@@ -351,11 +314,11 @@ class ChatViewModel(
 
     class Factory(
         private val settingsRepository: SettingsRepository,
-        private val spacebotRepository: SpacebotRepository,
+        private val openAIRepository: OpenAIRepository,
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            return ChatViewModel(settingsRepository, spacebotRepository) as T
+            return ChatViewModel(settingsRepository, openAIRepository) as T
         }
     }
 

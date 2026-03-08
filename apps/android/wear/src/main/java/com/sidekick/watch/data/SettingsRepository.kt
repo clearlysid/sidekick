@@ -18,8 +18,8 @@ import org.json.JSONObject
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "spacebot_settings")
 
 data class AgentSettings(
-    val backendId: String = AgentBackends.spacebot.id,
-    val baseUrl: String = AgentBackends.spacebot.defaultBaseUrl,
+    val backendId: String = AgentBackends.spark.id,
+    val baseUrl: String = AgentBackends.spark.defaultBaseUrl,
     val authToken: String = "",
 )
 

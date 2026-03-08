@@ -24,7 +24,7 @@ import androidx.navigation.navArgument
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.wear.input.RemoteInputIntentHelper
 import com.sidekick.watch.data.SettingsRepository
-import com.sidekick.watch.data.SpacebotRepository
+import com.sidekick.watch.data.OpenAIRepository
 import com.sidekick.watch.presentation.theme.SidekickTheme
 import com.sidekick.watch.ui.ChatScreen
 import com.sidekick.watch.ui.HomeScreen
@@ -36,12 +36,12 @@ import okhttp3.OkHttpClient
 class MainActivity : ComponentActivity() {
     private val okHttpClient by lazy { OkHttpClient.Builder().build() }
     private val settingsRepository by lazy { SettingsRepository(applicationContext) }
-    private val spacebotRepository by lazy { SpacebotRepository(okHttpClient) }
+    private val openAIRepository by lazy { OpenAIRepository(okHttpClient) }
 
     private val viewModel: ChatViewModel by viewModels {
         ChatViewModel.Factory(
             settingsRepository = settingsRepository,
-            spacebotRepository = spacebotRepository,
+            openAIRepository = openAIRepository,
         )
     }
 

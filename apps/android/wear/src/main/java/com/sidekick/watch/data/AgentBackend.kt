@@ -7,15 +7,14 @@ data class AgentBackend(
 )
 
 object AgentBackends {
-    val spacebot =
+    val spark =
         AgentBackend(
-            id = "spacebot",
-            displayName = "Spacebot",
+            id = "spark",
+            displayName = "Spark",
             defaultBaseUrl = "https://debian.finch-kelvin.ts.net",
         )
 
-    // Add new backends here (for example: openclaw, claude-code).
-    val supported: List<AgentBackend> = listOf(spacebot)
+    val supported: List<AgentBackend> = listOf(spark)
 
-    fun fromId(id: String?): AgentBackend = supported.firstOrNull { it.id == id } ?: spacebot
+    fun fromId(id: String?): AgentBackend = supported.firstOrNull { it.id == id } ?: spark
 }
