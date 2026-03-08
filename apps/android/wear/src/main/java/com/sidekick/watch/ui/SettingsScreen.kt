@@ -47,9 +47,11 @@ fun SettingsScreen(
     selectedAgentFlavorId: String,
     selectedAgentFlavorName: String,
     baseUrl: String,
+    model: String,
     authToken: String,
     onSaveAgentFlavor: (String) -> Unit,
     onSaveBaseUrl: (String) -> Unit,
+    onSaveModel: (String) -> Unit,
     onSaveAuthToken: (String) -> Unit,
 ) {
     var dialog by remember { mutableStateOf<SettingDialog?>(null) }
@@ -72,7 +74,7 @@ fun SettingsScreen(
                         Text(
                             text = "Settings",
                             style = MaterialTheme.typography.titleSmall,
-                            modifier = Modifier.padding(top = 8.dp),
+                            modifier = Modifier.padding(top = 8.dp, bottom = 8.dp),
                         )
                     }
                 }
@@ -102,6 +104,22 @@ fun SettingsScreen(
                         Text("Base URL", style = MaterialTheme.typography.labelSmall)
                         Text(
                             text = baseUrl.ifBlank { "https://..." },
+                            style = MaterialTheme.typography.labelSmall,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+
+                item {
+                    Card(
+                        onClick = { dialog = SettingDialog.Model },
+                        modifier = Modifier.fillMaxWidth().transformedHeight(this, transformationSpec),
+                        transformation = SurfaceTransformation(transformationSpec),
+                    ) {
+                        Text("Model", style = MaterialTheme.typography.labelSmall)
+                        Text(
+                            text = model.ifBlank { "default" },
                             style = MaterialTheme.typography.labelSmall,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -148,6 +166,20 @@ fun SettingsScreen(
                     onCancel = { dialog = null },
                     onSave = { value ->
                         onSaveBaseUrl(value)
+                        dialog = null
+                    },
+                )
+            }
+
+            SettingDialog.Model -> {
+                TextSettingDialog(
+                    title = "Model",
+                    initialValue = model,
+                    keyboardType = KeyboardType.Text,
+                    placeholder = "model name",
+                    onCancel = { dialog = null },
+                    onSave = { value ->
+                        onSaveModel(value)
                         dialog = null
                     },
                 )
@@ -315,5 +347,6 @@ private fun maskToken(token: String): String {
 private enum class SettingDialog {
     AgentFlavor,
     BaseUrl,
+    Model,
     AuthToken,
 }

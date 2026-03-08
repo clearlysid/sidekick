@@ -6,6 +6,8 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.sidekick.watch.data.AgentBackends
 import com.sidekick.watch.data.AgentSettings
+import com.sidekick.watch.data.OpenAIMessage
+import com.sidekick.watch.data.OpenAIRepository
 import com.sidekick.watch.data.PersistedChatMessage
 import com.sidekick.watch.data.PersistedConversationState
 import com.sidekick.watch.data.PersistedConversationSummary
@@ -26,6 +28,7 @@ import kotlinx.coroutines.launch
 class ChatViewModel(
     private val settingsRepository: SettingsRepository,
     private val spacebotRepository: SpacebotRepository,
+    private val openAIRepository: OpenAIRepository,
 ) : ViewModel() {
     private val logTag = "SidekickInput"
 
@@ -51,6 +54,7 @@ class ChatViewModel(
                         agentFlavorInput = if (it.agentFlavorInput.isEmpty()) settings.backendId else it.agentFlavorInput,
                         baseUrlInput = if (it.baseUrlInput.isEmpty()) settings.baseUrl else it.baseUrlInput,
                         authTokenInput = if (it.authTokenInput.isEmpty()) settings.authToken else it.authTokenInput,
+                        modelInput = if (it.modelInput.isEmpty()) settings.model else it.modelInput,
                     )
                 }
             }
@@ -116,10 +120,17 @@ class ChatViewModel(
                     normalizedBaseUrl == currentBackend.defaultBaseUrl -> nextBackend.defaultBaseUrl
                     else -> state.baseUrlInput
                 }
+            val nextModel =
+                when {
+                    state.modelInput.isBlank() -> nextBackend.defaultModel.orEmpty()
+                    state.modelInput.trim() == currentBackend.defaultModel.orEmpty() -> nextBackend.defaultModel.orEmpty()
+                    else -> state.modelInput
+                }
 
             state.copy(
                 agentFlavorInput = nextBackend.id,
                 baseUrlInput = nextBaseUrl,
+                modelInput = nextModel,
             )
         }
         persistCurrentSettings()
@@ -135,6 +146,11 @@ class ChatViewModel(
         persistCurrentSettings()
     }
 
+    fun saveModel(model: String) {
+        _uiState.update { it.copy(modelInput = model) }
+        persistCurrentSettings()
+    }
+
     private fun persistCurrentSettings() {
         val state = _uiState.value
         viewModelScope.launch {
@@ -142,6 +158,7 @@ class ChatViewModel(
                 backendId = state.agentFlavorInput,
                 baseUrl = state.baseUrlInput,
                 authToken = state.authTokenInput,
+                model = state.modelInput,
             )
             _uiState.update { it.copy(errorMessage = null) }
         }
@@ -199,6 +216,18 @@ class ChatViewModel(
         }
         persistConversationState()
 
+        when (backend.id) {
+            "openclaw" -> sendViaOpenAI(localConversationId, settings)
+            else -> sendViaSpacebot(localConversationId, backendConversationId, trimmed, settings)
+        }
+    }
+
+    private fun sendViaSpacebot(
+        localConversationId: String,
+        backendConversationId: String,
+        content: String,
+        settings: AgentSettings,
+    ) {
         viewModelScope.launch {
             val sendResult =
                 spacebotRepository.sendMessage(
@@ -206,7 +235,7 @@ class ChatViewModel(
                     authToken = settings.authToken,
                     conversationId = backendConversationId,
                     senderId = senderId,
-                    content = trimmed,
+                    content = content,
                 )
 
             if (sendResult.isFailure) {
@@ -259,6 +288,69 @@ class ChatViewModel(
                         },
                     isPolling = false,
                 )
+            }
+            persistConversationState()
+        }
+    }
+
+    private fun sendViaOpenAI(localConversationId: String, settings: AgentSettings) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSending = false, isPolling = true) }
+
+            val history = _uiState.value.messagesByConversation[localConversationId].orEmpty()
+            val openAIMessages = history.map { msg ->
+                OpenAIMessage(
+                    role = when (msg.role) {
+                        MessageRole.USER -> "user"
+                        MessageRole.BOT -> "assistant"
+                    },
+                    content = msg.text,
+                )
+            }
+
+            try {
+                val botMessageId = UUID.randomUUID().toString()
+                val buffer = StringBuilder()
+
+                openAIRepository.sendMessageStreaming(
+                    baseUrl = settings.baseUrl,
+                    authToken = settings.authToken,
+                    model = settings.model,
+                    messages = openAIMessages,
+                ).collect { chunk ->
+                    buffer.append(chunk)
+                    val snapshot = buffer.toString()
+                    _uiState.update { state ->
+                        val existing = state.messagesByConversation[localConversationId].orEmpty()
+                        val withoutStreaming = existing.filter { it.id != botMessageId }
+                        val streamingMessage = ChatMessage(id = botMessageId, role = MessageRole.BOT, text = snapshot)
+                        state.copy(
+                            messagesByConversation = state.messagesByConversation + (localConversationId to (withoutStreaming + streamingMessage)),
+                        )
+                    }
+                }
+
+                val finalText = buffer.toString()
+                _uiState.update { state ->
+                    state.copy(
+                        conversations =
+                            if (finalText.isBlank()) state.conversations
+                            else updateConversationMeta(
+                                conversations = state.conversations,
+                                conversationId = localConversationId,
+                                inputText = finalText,
+                                allowInitialPromptUpdate = false,
+                            ),
+                        isPolling = false,
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        isPolling = false,
+                        errorMessage = formatNetworkError(e, "send"),
+                    )
+                }
             }
             persistConversationState()
         }
@@ -352,10 +444,11 @@ class ChatViewModel(
     class Factory(
         private val settingsRepository: SettingsRepository,
         private val spacebotRepository: SpacebotRepository,
+        private val openAIRepository: OpenAIRepository,
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            return ChatViewModel(settingsRepository, spacebotRepository) as T
+            return ChatViewModel(settingsRepository, spacebotRepository, openAIRepository) as T
         }
     }
 
@@ -411,6 +504,7 @@ data class ChatUiState(
     val agentFlavorInput: String = "",
     val baseUrlInput: String = "",
     val authTokenInput: String = "",
+    val modelInput: String = "",
     val isSending: Boolean = false,
     val isPolling: Boolean = false,
     val errorMessage: String? = null,

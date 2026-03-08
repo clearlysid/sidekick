@@ -1,11 +1,12 @@
 package com.sidekick.watch.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -38,8 +39,6 @@ fun ChatScreen(
 ) {
     val listState = rememberTransformingLazyColumnState()
     val transformationSpec = rememberTransformationSpec()
-    val compactMessagePadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
-
     AppScaffold {
         ScreenScaffold(
             scrollState = listState,
@@ -74,15 +73,20 @@ fun ChatScreen(
                 uiState.messages.forEach { message ->
                     item {
                         if (message.role == MessageRole.USER) {
-                            Card(
-                                onClick = {},
+                            Box(
                                 modifier = Modifier.fillMaxWidth(),
-                                contentPadding = compactMessagePadding,
-                                transformation = SurfaceTransformation(transformationSpec),
+                                contentAlignment = Alignment.CenterEnd,
                             ) {
                                 Text(
                                     text = message.text,
                                     style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier
+                                        .background(
+                                            MaterialTheme.colorScheme.surfaceContainer,
+                                            RoundedCornerShape(16.dp),
+                                        )
+                                        .padding(horizontal = 10.dp, vertical = 6.dp),
                                 )
                             }
                         } else {

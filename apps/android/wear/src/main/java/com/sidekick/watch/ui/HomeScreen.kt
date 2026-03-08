@@ -123,8 +123,8 @@ fun HomeScreen(
                             onClick = onNewConversationWithVoice,
                             colors =
                                 IconButtonDefaults.filledIconButtonColors(
-                                    containerColor = MaterialTheme.colorScheme.primary,
-                                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                                    containerColor = MaterialTheme.colorScheme.tertiary,
+                                    contentColor = MaterialTheme.colorScheme.onTertiary,
                                 ),
                         ) {
                             Icon(
@@ -145,11 +145,11 @@ fun HomeScreen(
                             Text(
                                 text = conversation.initialPrompt?.take(42)?.ifBlank { "New conversation" }
                                     ?: "New conversation",
-                                style = MaterialTheme.typography.bodyMedium,
+                                style = MaterialTheme.typography.titleSmall,
                             )
                             Text(
-                                text = "Last updated ${formatLastUpdated(conversation.lastUpdatedEpochMs)}",
-                                style = MaterialTheme.typography.labelSmall,
+                                text = formatLastUpdated(conversation.lastUpdatedEpochMs),
+                                style = MaterialTheme.typography.bodyExtraSmall,
                             )
                         }
                     }

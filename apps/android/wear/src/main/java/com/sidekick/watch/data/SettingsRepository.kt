@@ -18,9 +18,10 @@ import org.json.JSONObject
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "spacebot_settings")
 
 data class AgentSettings(
-    val backendId: String = AgentBackends.spacebot.id,
-    val baseUrl: String = AgentBackends.spacebot.defaultBaseUrl,
+    val backendId: String = AgentBackends.openclaw.id,
+    val baseUrl: String = AgentBackends.openclaw.defaultBaseUrl,
     val authToken: String = "",
+    val model: String = AgentBackends.openclaw.defaultModel.orEmpty(),
 )
 
 class SettingsRepository(private val context: Context) {
@@ -40,16 +41,18 @@ class SettingsRepository(private val context: Context) {
                     backendId = backend.id,
                     baseUrl = prefs[BASE_URL_KEY]?.ifBlank { backend.defaultBaseUrl } ?: backend.defaultBaseUrl,
                     authToken = prefs[AUTH_TOKEN_KEY].orEmpty(),
+                    model = prefs[MODEL_KEY]?.ifBlank { backend.defaultModel.orEmpty() } ?: backend.defaultModel.orEmpty(),
                 )
             }
 
-    suspend fun saveSettings(backendId: String, baseUrl: String, authToken: String) {
+    suspend fun saveSettings(backendId: String, baseUrl: String, authToken: String, model: String) {
         context.dataStore.edit { prefs ->
             val backend = AgentBackends.fromId(backendId)
             val normalizedBaseUrl = baseUrl.trim().trimEnd('/').ifBlank { backend.defaultBaseUrl }
             prefs[BACKEND_ID_KEY] = backend.id
             prefs[BASE_URL_KEY] = normalizedBaseUrl
             prefs[AUTH_TOKEN_KEY] = authToken.trim()
+            prefs[MODEL_KEY] = model.trim().ifBlank { backend.defaultModel.orEmpty() }
         }
     }
 
@@ -185,6 +188,7 @@ class SettingsRepository(private val context: Context) {
         val BACKEND_ID_KEY = stringPreferencesKey("backend_id")
         val BASE_URL_KEY = stringPreferencesKey("base_url")
         val AUTH_TOKEN_KEY = stringPreferencesKey("auth_token")
+        val MODEL_KEY = stringPreferencesKey("model")
         val CONVERSATION_STATE_KEY = stringPreferencesKey("conversation_state_json")
     }
 }
