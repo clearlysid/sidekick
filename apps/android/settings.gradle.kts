@@ -23,5 +23,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "Sidekick"
-include(":mobile")
 include(":wear")

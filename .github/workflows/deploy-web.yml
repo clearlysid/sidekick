@@ -5,10 +5,10 @@ on:
     branches:
       - main
     paths:
-      - "apps/web-landing/**"
+      - "apps/web/**"
       - "package.json"
       - "bun.lock"
-      - ".github/workflows/deploy-web-landing.yml"
+      - ".github/workflows/deploy-web.yml"
   workflow_dispatch:
 
 permissions:
@@ -39,7 +39,7 @@ jobs:
         run: bun run web:build
 
       - name: Add CNAME
-        run: echo "sidekick.watch" > apps/web-landing/dist/CNAME
+        run: echo "sidekick.watch" > apps/web/dist/CNAME
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
@@ -47,7 +47,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: apps/web-landing/dist
+          path: apps/web/dist
 
   deploy:
     environment:

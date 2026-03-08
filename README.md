@@ -4,8 +4,8 @@ A single repository for Sidekick apps.
 
 ## What Is Here
 
-- `apps/android` - Android project (Wear app + phone app)
-- `apps/web-landing` - static landing page built/served with Bun
+- `apps/android` - Android project (Wear OS app)
+- `apps/web` - static landing page built/served with Bun
 
 ## Repo Shape
 
@@ -13,34 +13,19 @@ A single repository for Sidekick apps.
 sidekick/
 |-- apps/
 |   |-- android/
-|   |   |-- mobile/
-|   |   `-- wear/
-|   `-- web-landing/
+|   |   └── wear/
+|   └── web/
 |-- package.json
 |-- bun.lock
-`-- README.md
-```
-
-## Platform Relationship
-
-```text
-+-------------------+              +----------------------+
-| apps/android/wear | <----------> | apps/android/mobile  |
-| primary app       |              | companion (minimal)  |
-+-------------------+              +----------------------+
-
-+-------------------+
-| apps/web-landing  |
-| static website    |
-+-------------------+
+└── README.md
 ```
 
 ## Quick Start
 
-### Web landing
+### Web
 
 ```bash
-cd apps/web-landing
+cd apps/web
 bun install
 bun run build
 bun run serve
@@ -51,7 +36,6 @@ bun run serve
 ```bash
 cd apps/android
 ./gradlew :wear:assembleDebug
-./gradlew :mobile:assembleDebug
 ```
 
 ## Root Commands
@@ -60,13 +44,12 @@ cd apps/android
 bun run web:build
 bun run web:serve
 bun run android:wear:build
-bun run android:mobile:build
 ```
 
-## Deploy Web Landing to GitHub Pages
+## Deploy Web to GitHub Pages
 
-The repo includes a workflow at `.github/workflows/deploy-web-landing.yml` that:
-- builds `apps/web-landing/dist`
+The repo includes a workflow at `.github/workflows/deploy-web.yml` that:
+- builds `apps/web/dist`
 - deploys to GitHub Pages on pushes to `main`
 - writes a `CNAME` file for `sidekick.watch`
 
