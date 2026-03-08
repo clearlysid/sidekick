@@ -47,6 +47,7 @@ class MainActivity : ComponentActivity() {
 
     private var requestedHomePage by mutableStateOf(false)
     private var requestedConversationPageId by mutableStateOf<String?>(null)
+    private var requestedAssistantVoiceLaunch by mutableStateOf(false)
     private var shouldCreateConversationAfterComposer: Boolean = false
 
     private val textInputLauncher =
@@ -79,7 +80,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        handleAssistIntent(intent)
+        handleLaunchIntent(intent)
 
         setContent {
             val uiState = viewModel.uiState.collectAsStateWithLifecycle().value
@@ -94,6 +95,18 @@ class MainActivity : ComponentActivity() {
                         launchSingleTop = true
                     }
                     requestedHomePage = false
+                }
+            }
+
+            LaunchedEffect(requestedAssistantVoiceLaunch) {
+                if (requestedAssistantVoiceLaunch) {
+                    pagerState.animateScrollToPage(HOME_PAGE)
+                    homeNavController.navigate(HOME_LIST_ROUTE) {
+                        popUpTo(HOME_LIST_ROUTE) { inclusive = false }
+                        launchSingleTop = true
+                    }
+                    launchVoiceInput()
+                    requestedAssistantVoiceLaunch = false
                 }
             }
 
@@ -167,12 +180,15 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        handleAssistIntent(intent)
+        setIntent(intent)
+        handleLaunchIntent(intent)
     }
 
-    private fun handleAssistIntent(intent: Intent?) {
-        if (intent?.action == Intent.ACTION_ASSIST) {
+    private fun handleLaunchIntent(intent: Intent?) {
+        val action = intent?.action ?: return
+        if (action == Intent.ACTION_ASSIST) {
             requestedHomePage = true
+            requestedAssistantVoiceLaunch = true
         }
     }
 
