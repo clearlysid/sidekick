@@ -1,61 +1,49 @@
-# Sidekick Monorepo
+# Sidekick
 
-A single repository for Sidekick apps.
+Sidekick brings a light, minimal AI Assistant to your wrist ⌚
 
-## What Is Here
+It is a small app for WearOS that lets you interact with your Clawdbot/OpenClaw/etc. through voice or text. The app tracks your conversations and can notify you once the agent responds. It's really just meant to be a nice, clean, efficent way of summoning your clankers — with a UI that feels unobtrusive.
 
-- `apps/android` - Android project (Wear OS app)
-- `apps/web` - static landing page built/served with Bun
+### Roadmap
+- [x] Basic UI
+- [x] Spacebot support
+- [ ] Openclaw support
+- [ ] Haptics for replies
+- [ ] Voice mode quick launch
+- [ ] Tile + Complication
+- [ ] Nicer landing page
 
-## Repo Shape
+## Developer Guide
 
 ```text
 sidekick/
-|-- apps/
-|   |-- android/
-|   |   └── wear/
-|   └── web/
-|-- package.json
-|-- bun.lock
-└── README.md
+|── apps/
+|   |── android/
+|   |   └── wear/        | Wear OS app
+|   └── web/             | Landing page
+└── package.json
 ```
 
-## Quick Start
-
-### Web
+### Commands
 
 ```bash
+# For landing page
 cd apps/web
 bun install
 bun run build
 bun run serve
-```
 
-### Android
-
-```bash
+# For watch app
 cd apps/android
 ./gradlew :wear:assembleDebug
-```
 
-## Root Commands
-
-```bash
+# For creating builds
 bun run web:build
-bun run web:serve
 bun run android:wear:build
 ```
 
-## Deploy Web to GitHub Pages
+### Notes
 
-The repo includes a workflow at `.github/workflows/deploy-web.yml` that:
-- builds `apps/web/dist`
-- deploys to GitHub Pages on pushes to `main`
-- writes a `CNAME` file for `sidekick.watch`
-
-### One-time GitHub setup
-
-1. Push this repo to GitHub.
-2. In GitHub: `Settings -> Pages`
-3. Under `Source`, select `GitHub Actions`.
-4. In `Settings -> Environments -> github-pages`, approve deploy protections if required.
+1. Pushing to `main` deploys the latest landing page.
+2. PRs for bugfixes, support for other agents are welcome.
+3. It's my very first Kotlin project, be kind!
