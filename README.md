@@ -7,7 +7,7 @@ It is a small app for WearOS that lets you interact with your Clawdbot/OpenClaw/
 ### Roadmap
 - [x] Basic UI
 - [x] Spacebot support
-- [ ] Openclaw support
+- [x] Openclaw support
 - [ ] Haptics for replies
 - [ ] Voice mode quick launch
 - [ ] Tile + Complication
