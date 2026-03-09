@@ -17,4 +17,4 @@ local.properties
 *.log
 
 # Android release artifacts
-apps/android/**/release/
+android/**/release/

@@ -17,10 +17,9 @@ It is a small app for WearOS that lets you interact with your Clawdbot/OpenClaw/
 
 ```text
 sidekick/
-|── apps/
-|   |── android/
-|   |   └── wear/        | Wear OS app
-|   └── web/             | Landing page
+|── android/
+|   └── wear/        | Wear OS app
+|── web/             | Landing page
 └── package.json
 ```
 
@@ -28,13 +27,13 @@ sidekick/
 
 ```bash
 # For landing page
-cd apps/web
+cd web
 bun install
 bun run build
 bun run serve
 
 # For watch app
-cd apps/android
+cd android
 ./gradlew :wear:assembleDebug
 
 # For creating builds

@@ -2,11 +2,11 @@
   "name": "sidekick-monorepo",
   "private": true,
   "workspaces": [
-    "apps/web"
+    "web"
   ],
   "scripts": {
-    "web:serve": "bun run --cwd apps/web serve",
-    "web:build": "bun run --cwd apps/web build",
-    "android:wear:build": "cd apps/android && ./gradlew :wear:assembleDebug"
+    "web:serve": "bun run --cwd web serve",
+    "web:build": "bun run --cwd web build",
+    "android:wear:build": "cd android && ./gradlew :wear:assembleDebug"
   }
 }

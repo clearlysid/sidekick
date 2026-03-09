@@ -5,12 +5,12 @@
     "": {
       "name": "sidekick-monorepo",
     },
-    "apps/web-landing": {
+    "web": {
       "name": "@sidekick/web-landing",
       "version": "0.1.0",
     },
   },
   "packages": {
-    "@sidekick/web-landing": ["@sidekick/web-landing@workspace:apps/web-landing"],
+    "@sidekick/web-landing": ["@sidekick/web-landing@workspace:web"],
   }
 }
