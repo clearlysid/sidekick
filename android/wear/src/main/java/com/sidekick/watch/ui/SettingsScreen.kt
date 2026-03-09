@@ -339,9 +339,9 @@ private fun InputField(
 
 private fun maskToken(token: String): String {
     if (token.isBlank()) return "token"
-    if (token.length <= 6) return "*".repeat(token.length)
-    val suffix = token.takeLast(4)
-    return "*".repeat(token.length - 4) + suffix
+    if (token.length <= 4) return "*".repeat(token.length)
+    val prefix = token.take(4)
+    return prefix + "*".repeat(token.length - 4)
 }
 
 private enum class SettingDialog {
