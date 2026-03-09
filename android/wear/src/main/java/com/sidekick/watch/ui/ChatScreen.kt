@@ -8,9 +8,16 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -39,6 +46,14 @@ fun ChatScreen(
 ) {
     val listState = rememberTransformingLazyColumnState()
     val transformationSpec = rememberTransformationSpec()
+    val haptic = LocalHapticFeedback.current
+    var wasPolling by remember { mutableStateOf(false) }
+    LaunchedEffect(uiState.isPolling) {
+        if (wasPolling && !uiState.isPolling) {
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+        }
+        wasPolling = uiState.isPolling
+    }
     AppScaffold {
         ScreenScaffold(
             scrollState = listState,
