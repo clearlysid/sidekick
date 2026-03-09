@@ -16,5 +16,8 @@ local.properties
 **/.turbo
 *.log
 
+# Secrets
+.env
+
 # Android release artifacts
 android/**/release/

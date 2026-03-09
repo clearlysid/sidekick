@@ -1,5 +1,7 @@
 package com.sidekick.watch.data
 
+import com.sidekick.watch.BuildConfig
+
 data class AgentBackend(
     val id: String,
     val displayName: String,
@@ -8,18 +10,20 @@ data class AgentBackend(
 )
 
 object AgentBackends {
+    private val baseUrl = BuildConfig.DEFAULT_BASE_URL
+
     val spacebot =
         AgentBackend(
             id = "spacebot",
             displayName = "Spacebot",
-            defaultBaseUrl = "https://debian.finch-kelvin.ts.net",
+            defaultBaseUrl = baseUrl,
         )
 
     val openclaw =
         AgentBackend(
             id = "openclaw",
             displayName = "OpenClaw",
-            defaultBaseUrl = "https://debian.finch-kelvin.ts.net/chat",
+            defaultBaseUrl = baseUrl,
             defaultModel = "openclaw:main",
         )
 

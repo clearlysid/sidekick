@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.sidekick.watch.BuildConfig
 import java.io.IOException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
@@ -23,7 +24,7 @@ private val json = Json { ignoreUnknownKeys = true }
 data class AgentSettings(
     val backendId: String = AgentBackends.openclaw.id,
     val baseUrl: String = AgentBackends.openclaw.defaultBaseUrl,
-    val authToken: String = "",
+    val authToken: String = BuildConfig.DEFAULT_AUTH_TOKEN,
     val model: String = AgentBackends.openclaw.defaultModel.orEmpty(),
 )
 
@@ -43,7 +44,7 @@ class SettingsRepository(private val context: Context) {
                 AgentSettings(
                     backendId = backend.id,
                     baseUrl = prefs[BASE_URL_KEY]?.ifBlank { backend.defaultBaseUrl } ?: backend.defaultBaseUrl,
-                    authToken = prefs[AUTH_TOKEN_KEY].orEmpty(),
+                    authToken = prefs[AUTH_TOKEN_KEY]?.ifBlank { BuildConfig.DEFAULT_AUTH_TOKEN } ?: BuildConfig.DEFAULT_AUTH_TOKEN,
                     model = prefs[MODEL_KEY]?.ifBlank { backend.defaultModel.orEmpty() } ?: backend.defaultModel.orEmpty(),
                 )
             }

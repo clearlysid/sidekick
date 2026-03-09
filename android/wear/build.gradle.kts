@@ -1,7 +1,14 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
+}
+
+val envFile = rootProject.projectDir.resolve("../.env")
+val envProps = Properties().apply {
+    if (envFile.exists()) envFile.inputStream().use { load(it) }
 }
 
 android {
@@ -12,18 +19,29 @@ android {
         }
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = file(System.getProperty("user.home") + "/sidekick-wear-keystore.jks")
+            storePassword = "sidekick"
+            keyAlias = "key0"
+            keyPassword = "sidekick"
+        }
+    }
+
     defaultConfig {
         applicationId = "com.sidekick.watch"
         minSdk = 33
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
-
+        buildConfigField("String", "DEFAULT_AUTH_TOKEN", "\"${envProps.getProperty("DEFAULT_AUTH_TOKEN", "")}\"")
+        buildConfigField("String", "DEFAULT_BASE_URL", "\"${envProps.getProperty("DEFAULT_BASE_URL", "")}\"")
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -37,7 +55,9 @@ android {
     useLibrary("wear-sdk")
     buildFeatures {
         compose = true
+        buildConfig = true
     }
+
 }
 
 dependencies {

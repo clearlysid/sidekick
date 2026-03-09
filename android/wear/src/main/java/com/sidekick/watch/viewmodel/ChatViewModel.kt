@@ -4,6 +4,7 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.sidekick.watch.BuildConfig
 import com.sidekick.watch.data.AgentBackends
 import com.sidekick.watch.data.AgentSettings
 import com.sidekick.watch.data.OpenAIMessage
@@ -107,7 +108,7 @@ class ChatViewModel(
             settingsRepository.saveSettings(
                 backendId = AgentBackends.openclaw.id,
                 baseUrl = AgentBackends.openclaw.defaultBaseUrl,
-                authToken = "",
+                authToken = BuildConfig.DEFAULT_AUTH_TOKEN,
                 model = AgentBackends.openclaw.defaultModel.orEmpty(),
             )
             settingsRepository.saveConversationState(
