@@ -1,8 +1,10 @@
-# Sidekick
+# Sidekick (for Wear OS ⌚)
 
-Sidekick brings a light, minimal AI Assistant to your wrist ⌚
+Sidekick brings your AI Assistant to your wrist. A claw should be attached to your limbs after all 🤪
 
-It is a small app for WearOS that lets you interact with your Clawdbot/OpenClaw/etc. through voice or text. The app tracks your conversations and can notify you once the agent responds. It's really just meant to be a nice, clean, efficent way of summoning your clankers — with a UI that feels unobtrusive.
+It's a small app for WearOS that let you interact with your Clawdbot, Openclaw, etc. through voice or text. You can start conversations, track old ones, get notified via haptics when your bot responds. It's really just meant to be a nice, clean, efficent way of summoning your clankers — with a UI that feels unobtrusive.
+
+I built this because I needed an "Agent Babysitter" that I could tap into, even if I was on a walk or on a train. Situations where access to a laptop or phone is either impractical or uncomfortable.
 
 ### Roadmap
 - [x] Basic UI
@@ -43,6 +45,6 @@ bun run android:wear:build
 
 ### Notes
 
-1. Pushing to `main` deploys the latest landing page.
-2. PRs for bugfixes, support for other agents are welcome.
-3. It's my very first Kotlin project, be kind!
+1. Pushing to `main` deploys landing page to Github pages.
+2. PRs for bugfixes and support for other agents are welcome.
+3. It's my very first Kotlin project — be kind!
