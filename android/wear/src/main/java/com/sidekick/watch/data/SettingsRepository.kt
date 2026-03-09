@@ -48,6 +48,17 @@ class SettingsRepository(private val context: Context) {
                 )
             }
 
+    val themeFlow: Flow<String> =
+        context.dataStore.data
+            .catch { ex ->
+                if (ex is IOException) emit(emptyPreferences()) else throw ex
+            }
+            .map { prefs -> prefs[THEME_KEY] ?: "default" }
+
+    suspend fun saveTheme(themeId: String) {
+        context.dataStore.edit { prefs -> prefs[THEME_KEY] = themeId }
+    }
+
     suspend fun saveSettings(backendId: String, baseUrl: String, authToken: String, model: String) {
         context.dataStore.edit { prefs ->
             val backend = AgentBackends.fromId(backendId)
@@ -87,6 +98,7 @@ class SettingsRepository(private val context: Context) {
         val AUTH_TOKEN_KEY = stringPreferencesKey("auth_token")
         val MODEL_KEY = stringPreferencesKey("model")
         val CONVERSATION_STATE_KEY = stringPreferencesKey("conversation_state_json")
+        val THEME_KEY = stringPreferencesKey("color_theme")
     }
 }
 

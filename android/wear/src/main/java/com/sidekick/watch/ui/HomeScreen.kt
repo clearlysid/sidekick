@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.runtime.Composable
@@ -29,6 +30,7 @@ import androidx.wear.compose.material3.IconButtonDefaults
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.ScreenScaffold
 import androidx.wear.compose.material3.SurfaceTransformation
+import androidx.wear.compose.material3.SwipeToReveal
 import androidx.wear.compose.material3.Text
 import androidx.wear.compose.material3.lazy.rememberTransformationSpec
 import androidx.wear.compose.material3.lazy.transformedHeight
@@ -43,6 +45,7 @@ fun HomeScreen(
     onNewConversationWithKeyboard: () -> Unit,
     onNewConversationWithVoice: () -> Unit,
     onOpenConversation: (String) -> Unit,
+    onDeleteConversation: (String) -> Unit,
     loadMoreIncrement: Int,
 ) {
     val listState = rememberTransformingLazyColumnState()
@@ -136,21 +139,34 @@ fun HomeScreen(
                 }
 
                 conversations.take(visibleConversationCount).forEach { conversation ->
-                    item {
-                        Card(
-                            onClick = { onOpenConversation(conversation.id) },
-                            modifier = Modifier.fillMaxWidth().transformedHeight(this, transformationSpec),
-                            transformation = SurfaceTransformation(transformationSpec),
+                    item(key = conversation.id) {
+                        SwipeToReveal(
+                            primaryAction = {
+                                PrimaryActionButton(
+                                    onClick = { onDeleteConversation(conversation.id) },
+                                    icon = {
+                                        Icon(Icons.Filled.Delete, contentDescription = "Delete")
+                                    },
+                                    text = { Text("Delete") },
+                                )
+                            },
+                            onSwipePrimaryAction = { onDeleteConversation(conversation.id) },
                         ) {
-                            Text(
-                                text = conversation.initialPrompt?.take(42)?.ifBlank { "New conversation" }
-                                    ?: "New conversation",
-                                style = MaterialTheme.typography.titleSmall,
-                            )
-                            Text(
-                                text = formatLastUpdated(conversation.lastUpdatedEpochMs),
-                                style = MaterialTheme.typography.bodyExtraSmall,
-                            )
+                            Card(
+                                onClick = { onOpenConversation(conversation.id) },
+                                modifier = Modifier.fillMaxWidth(),
+                                transformation = SurfaceTransformation(transformationSpec),
+                            ) {
+                                Text(
+                                    text = conversation.initialPrompt?.take(42)?.ifBlank { "New conversation" }
+                                        ?: "New conversation",
+                                    style = MaterialTheme.typography.titleSmall,
+                                )
+                                Text(
+                                    text = formatLastUpdated(conversation.lastUpdatedEpochMs),
+                                    style = MaterialTheme.typography.bodyExtraSmall,
+                                )
+                            }
                         }
                     }
                 }

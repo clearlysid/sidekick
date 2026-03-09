@@ -132,7 +132,7 @@ class MainActivity : ComponentActivity() {
                 requestedConversationPageId = null
             }
 
-            SidekickTheme {
+            SidekickTheme(themeId = uiState.themeId) {
                 HorizontalPager(
                     state = pagerState,
                     modifier = Modifier.fillMaxSize(),
@@ -154,6 +154,7 @@ class MainActivity : ComponentActivity() {
                                         viewModel.openConversation(conversationId)
                                         homeNavController.navigate("$HOME_CONVERSATION_ROUTE/$conversationId")
                                     },
+                                    onDeleteConversation = viewModel::deleteConversation,
                                     loadMoreIncrement = HOME_CONVERSATIONS_PAGE_INCREMENT,
                                 )
                             }
@@ -181,10 +182,13 @@ class MainActivity : ComponentActivity() {
                             baseUrl = uiState.baseUrlInput,
                             model = uiState.modelInput,
                             authToken = uiState.authTokenInput,
+                            themeId = uiState.themeId,
                             onSaveAgentFlavor = viewModel::saveAgentFlavor,
                             onSaveBaseUrl = viewModel::saveBaseUrl,
                             onSaveModel = viewModel::saveModel,
                             onSaveAuthToken = viewModel::saveAuthToken,
+                            onSaveTheme = viewModel::saveTheme,
+                            onResetAll = viewModel::resetAll,
                         )
                     }
                 }

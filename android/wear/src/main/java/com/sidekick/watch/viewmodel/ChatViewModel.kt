@@ -63,6 +63,12 @@ class ChatViewModel(
         }
 
         viewModelScope.launch {
+            settingsRepository.themeFlow.collect { themeId ->
+                _uiState.update { it.copy(themeId = themeId) }
+            }
+        }
+
+        viewModelScope.launch {
             val persisted = settingsRepository.loadConversationState() ?: return@launch
             _uiState.update { state ->
                 state.copy(
@@ -73,6 +79,47 @@ class ChatViewModel(
                 )
             }
         }
+    }
+
+    fun deleteConversation(conversationId: String) {
+        _uiState.update { state ->
+            val updated = state.conversations.filter { it.id != conversationId }
+            val newSelected = if (state.selectedConversationId == conversationId) {
+                updated.firstOrNull()?.id
+            } else {
+                state.selectedConversationId
+            }
+            state.copy(
+                conversations = updated,
+                selectedConversationId = newSelected,
+                messagesByConversation = state.messagesByConversation - conversationId,
+                backendConversationIds = state.backendConversationIds - conversationId,
+            )
+        }
+        persistConversationState()
+    }
+
+    fun resetAll() {
+        _uiState.update {
+            ChatUiState()
+        }
+        viewModelScope.launch {
+            settingsRepository.saveSettings(
+                backendId = AgentBackends.openclaw.id,
+                baseUrl = AgentBackends.openclaw.defaultBaseUrl,
+                authToken = "",
+                model = AgentBackends.openclaw.defaultModel.orEmpty(),
+            )
+            settingsRepository.saveConversationState(
+                PersistedConversationState(),
+            )
+            settingsRepository.saveTheme("default")
+        }
+    }
+
+    fun saveTheme(themeId: String) {
+        _uiState.update { it.copy(themeId = themeId) }
+        viewModelScope.launch { settingsRepository.saveTheme(themeId) }
     }
 
     fun openConversation(conversationId: String) {
@@ -518,6 +565,7 @@ data class ChatUiState(
     val isSending: Boolean = false,
     val isPolling: Boolean = false,
     val errorMessage: String? = null,
+    val themeId: String = "default",
 ) {
     val selectedAgentFlavorName: String
         get() = AgentBackends.fromId(agentFlavorInput).displayName
