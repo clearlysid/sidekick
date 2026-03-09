@@ -121,8 +121,6 @@ class OpenAIRepository(
         }
     }
 
-    private fun normalizeBaseUrl(baseUrl: String): String = baseUrl.trim().trimEnd('/')
-
     companion object {
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
     }
