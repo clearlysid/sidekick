@@ -33,9 +33,16 @@ import com.sidekick.watch.ui.SettingsScreen
 import com.sidekick.watch.viewmodel.ChatViewModel
 import java.util.Locale
 import okhttp3.OkHttpClient
+import java.util.concurrent.TimeUnit
 
 class MainActivity : ComponentActivity() {
-    private val okHttpClient by lazy { OkHttpClient.Builder().build() }
+    private val okHttpClient by lazy {
+        OkHttpClient.Builder()
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(120, TimeUnit.SECONDS)
+            .writeTimeout(30, TimeUnit.SECONDS)
+            .build()
+    }
     private val settingsRepository by lazy { SettingsRepository(applicationContext) }
     private val spacebotRepository by lazy { SpacebotRepository(okHttpClient) }
     private val openAIRepository by lazy { OpenAIRepository(okHttpClient) }
