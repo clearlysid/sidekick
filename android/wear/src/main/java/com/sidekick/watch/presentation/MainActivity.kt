@@ -168,7 +168,6 @@ class MainActivity : ComponentActivity() {
                                     uiState = uiState,
                                     conversationTitle = uiState.currentConversationTitle,
                                     onOpenTextInput = ::launchRemoteTextInput,
-                                    onDismissError = viewModel::clearError,
                                 )
                             }
                         }

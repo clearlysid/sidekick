@@ -24,13 +24,11 @@ import androidx.compose.material.icons.filled.Add
 import androidx.wear.compose.foundation.lazy.TransformingLazyColumn
 import androidx.wear.compose.foundation.lazy.rememberTransformingLazyColumnState
 import androidx.wear.compose.material3.AppScaffold
-import androidx.wear.compose.material3.Card
 import androidx.wear.compose.material3.CircularProgressIndicator
 import androidx.wear.compose.material3.EdgeButton
 import androidx.wear.compose.material3.Icon
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.ScreenScaffold
-import androidx.wear.compose.material3.SurfaceTransformation
 import androidx.wear.compose.material3.Text
 import androidx.wear.compose.material3.lazy.rememberTransformationSpec
 import androidx.wear.compose.material3.lazy.transformedHeight
@@ -42,7 +40,6 @@ fun ChatScreen(
     uiState: ChatUiState,
     conversationTitle: String,
     onOpenTextInput: () -> Unit,
-    onDismissError: () -> Unit,
 ) {
     val listState = rememberTransformingLazyColumnState()
     val transformationSpec = rememberTransformationSpec()
@@ -132,15 +129,14 @@ fun ChatScreen(
 
                 uiState.errorMessage?.let { error ->
                     item {
-                        Card(
-                            onClick = onDismissError,
-                            modifier = Modifier.fillMaxWidth().transformedHeight(this, transformationSpec),
-                            transformation = SurfaceTransformation(transformationSpec),
-                        ) {
-                            Text("Error", style = MaterialTheme.typography.labelSmall)
-                            Text(error, style = MaterialTheme.typography.bodySmall)
-                            Text("Tap to dismiss", style = MaterialTheme.typography.labelSmall)
-                        }
+                        Text(
+                            text = error,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 8.dp, vertical = 2.dp),
+                        )
                     }
                 }
             }
