@@ -217,7 +217,7 @@ class ChatViewModel(
         persistConversationState()
 
         when (backend.id) {
-            "openclaw" -> sendViaOpenAI(localConversationId, settings)
+            "openclaw" -> sendViaOpenAI(localConversationId, backendConversationId, settings)
             else -> sendViaSpacebot(localConversationId, backendConversationId, trimmed, settings)
         }
     }
@@ -293,7 +293,7 @@ class ChatViewModel(
         }
     }
 
-    private fun sendViaOpenAI(localConversationId: String, settings: AgentSettings) {
+    private fun sendViaOpenAI(localConversationId: String, backendConversationId: String, settings: AgentSettings) {
         viewModelScope.launch {
             _uiState.update { it.copy(isSending = false, isPolling = true) }
 
@@ -317,6 +317,7 @@ class ChatViewModel(
                     authToken = settings.authToken,
                     model = settings.model,
                     messages = openAIMessages,
+                    user = backendConversationId,
                 ).collect { chunk ->
                     buffer.append(chunk)
                     val snapshot = buffer.toString()

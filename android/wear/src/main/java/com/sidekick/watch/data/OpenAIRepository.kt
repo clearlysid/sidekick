@@ -24,6 +24,7 @@ class OpenAIRepository(
         authToken: String,
         model: String,
         messages: List<OpenAIMessage>,
+        user: String? = null,
     ): Flow<String> = flow {
         val messagesArray = JSONArray().apply {
             messages.forEach { msg ->
@@ -34,6 +35,7 @@ class OpenAIRepository(
             .put("model", model)
             .put("messages", messagesArray)
             .put("stream", true)
+        if (!user.isNullOrBlank()) payload.put("user", user)
 
         val url = "${normalizeBaseUrl(baseUrl)}/v1/chat/completions"
         val requestBuilder = Request.Builder()
@@ -82,6 +84,7 @@ class OpenAIRepository(
         authToken: String,
         model: String,
         messages: List<OpenAIMessage>,
+        user: String? = null,
     ): Result<String> = withContext(Dispatchers.IO) {
         runCatching {
             val messagesArray = JSONArray().apply {
@@ -93,6 +96,7 @@ class OpenAIRepository(
                 .put("model", model)
                 .put("messages", messagesArray)
                 .put("stream", false)
+            if (!user.isNullOrBlank()) payload.put("user", user)
 
             val url = "${normalizeBaseUrl(baseUrl)}/v1/chat/completions"
             val requestBuilder = Request.Builder()
