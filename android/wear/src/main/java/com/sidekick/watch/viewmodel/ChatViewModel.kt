@@ -8,6 +8,7 @@ import com.sidekick.watch.data.AgentBackends
 import com.sidekick.watch.data.AgentSettings
 import com.sidekick.watch.data.OpenAIMessage
 import com.sidekick.watch.data.OpenAIRepository
+import com.sidekick.watch.data.ResponseNotifier
 import com.sidekick.watch.data.PersistedChatMessage
 import com.sidekick.watch.data.PersistedConversationState
 import com.sidekick.watch.data.PersistedConversationSummary
@@ -29,6 +30,7 @@ class ChatViewModel(
     private val settingsRepository: SettingsRepository,
     private val spacebotRepository: SpacebotRepository,
     private val openAIRepository: OpenAIRepository,
+    private val responseNotifier: ResponseNotifier,
 ) : ViewModel() {
     private val logTag = "SidekickInput"
 
@@ -270,19 +272,22 @@ class ChatViewModel(
             }
 
             val replyMessages = mapSpacebotMessages(pollResult.getOrNull().orEmpty())
+            val latestReplyText = replyMessages.lastOrNull()?.text.orEmpty()
+            if (latestReplyText.isNotBlank()) {
+                responseNotifier.notifyIfInBackground(latestReplyText)
+            }
             _uiState.update {
                 val existingMessages = it.messagesByConversation[localConversationId].orEmpty()
                 val updatedMessages = if (replyMessages.isEmpty()) existingMessages else existingMessages + replyMessages
-                val latestReply = replyMessages.lastOrNull()?.text.orEmpty()
                 it.copy(
                     messagesByConversation = it.messagesByConversation + (localConversationId to updatedMessages),
                     conversations =
-                        if (latestReply.isBlank()) it.conversations
+                        if (latestReplyText.isBlank()) it.conversations
                         else {
                             updateConversationMeta(
                                 conversations = it.conversations,
                                 conversationId = localConversationId,
-                                inputText = latestReply,
+                                inputText = latestReplyText,
                                 allowInitialPromptUpdate = false,
                             )
                         },
@@ -332,6 +337,9 @@ class ChatViewModel(
                 }
 
                 val finalText = buffer.toString()
+                if (finalText.isNotBlank()) {
+                    responseNotifier.notifyIfInBackground(finalText)
+                }
                 _uiState.update { state ->
                     state.copy(
                         conversations =
@@ -446,10 +454,11 @@ class ChatViewModel(
         private val settingsRepository: SettingsRepository,
         private val spacebotRepository: SpacebotRepository,
         private val openAIRepository: OpenAIRepository,
+        private val responseNotifier: ResponseNotifier,
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            return ChatViewModel(settingsRepository, spacebotRepository, openAIRepository) as T
+            return ChatViewModel(settingsRepository, spacebotRepository, openAIRepository, responseNotifier) as T
         }
     }
 
