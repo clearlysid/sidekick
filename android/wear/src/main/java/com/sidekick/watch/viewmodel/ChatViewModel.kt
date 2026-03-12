@@ -17,6 +17,7 @@ import com.sidekick.watch.data.SettingsRepository
 import com.sidekick.watch.data.SpacebotMessage
 import com.sidekick.watch.data.SpacebotRepository
 import java.util.UUID
+import kotlin.coroutines.cancellation.CancellationException
 import java.net.ConnectException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
@@ -401,6 +402,8 @@ class ChatViewModel(
                         isPolling = false,
                     )
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _uiState.update {
                     it.copy(

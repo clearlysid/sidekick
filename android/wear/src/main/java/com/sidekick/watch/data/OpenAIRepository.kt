@@ -1,23 +1,33 @@
 package com.sidekick.watch.data
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Response
+import okhttp3.sse.EventSource
+import okhttp3.sse.EventSourceListener
+import okhttp3.sse.EventSources
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.BufferedReader
+import java.util.concurrent.TimeUnit
 
 data class OpenAIMessage(val role: String, val content: String)
 
 class OpenAIRepository(
     private val client: OkHttpClient,
 ) {
+    /** Derived client sharing the same connection pool but with a longer read timeout for streaming. */
+    private val streamingClient by lazy {
+        client.newBuilder()
+            .readTimeout(5, TimeUnit.MINUTES)
+            .build()
+    }
 
     fun sendMessageStreaming(
         baseUrl: String,
@@ -25,7 +35,7 @@ class OpenAIRepository(
         model: String,
         messages: List<OpenAIMessage>,
         user: String? = null,
-    ): Flow<String> = flow {
+    ): Flow<String> = callbackFlow {
         val messagesArray = JSONArray().apply {
             messages.forEach { msg ->
                 put(JSONObject().put("role", msg.role).put("content", msg.content))
@@ -45,39 +55,44 @@ class OpenAIRepository(
             requestBuilder.addHeader("Authorization", "Bearer $authToken")
         }
 
-        val response = client.newCall(requestBuilder.build()).execute()
-        if (!response.isSuccessful) {
-            val body = response.body?.string().orEmpty()
-            response.close()
-            error("OpenAI request failed (${response.code}): $body")
-        }
-
-        val reader: BufferedReader = response.body?.byteStream()?.bufferedReader()
-            ?: run { response.close(); error("Empty response body") }
-
-        try {
-            var line: String?
-            while (reader.readLine().also { line = it } != null) {
-                val l = line ?: continue
-                if (!l.startsWith("data: ")) continue
-                val data = l.removePrefix("data: ").trim()
-                if (data == "[DONE]") break
-                val delta = runCatching {
+        val listener = object : EventSourceListener() {
+            override fun onEvent(eventSource: EventSource, id: String?, type: String?, data: String) {
+                if (data == "[DONE]") {
+                    channel.close()
+                    return
+                }
+                val content = runCatching {
                     JSONObject(data)
                         .optJSONArray("choices")
                         ?.optJSONObject(0)
                         ?.optJSONObject("delta")
                         ?.optString("content")
                 }.getOrNull()
-                if (!delta.isNullOrEmpty()) {
-                    emit(delta)
+                if (!content.isNullOrEmpty()) {
+                    trySend(content)
                 }
             }
-        } finally {
-            reader.close()
-            response.close()
+
+            override fun onFailure(eventSource: EventSource, t: Throwable?, response: Response?) {
+                val error = t
+                    ?: if (response != null && !response.isSuccessful) {
+                        Exception("OpenAI request failed (${response.code})")
+                    } else {
+                        null
+                    }
+                channel.close(error)
+            }
+
+            override fun onClosed(eventSource: EventSource) {
+                channel.close()
+            }
         }
-    }.flowOn(Dispatchers.IO)
+
+        val eventSource = EventSources.createFactory(streamingClient)
+            .newEventSource(requestBuilder.build(), listener)
+
+        awaitClose { eventSource.cancel() }
+    }
 
     suspend fun sendMessage(
         baseUrl: String,
