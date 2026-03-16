@@ -6,8 +6,6 @@ It's a small app for WearOS that let you interact with your Clawdbot, Openclaw, 
 
 I built this because I needed an "Agent Babysitter" that I could tap into, even if I was on a walk or on a train. Situations where access to a laptop or phone is either impractical or uncomfortable.
 
-Hi Kavya! 👋
-
 ### Roadmap
 - [x] Basic UI
 - [x] Spacebot support
