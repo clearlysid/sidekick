@@ -22,6 +22,9 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.rotary.onRotaryScrollEvent
 import androidx.compose.ui.layout.ContentScale
 import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
+import coil3.size.Size
+import androidx.compose.ui.platform.LocalContext
 
 @Composable
 fun ImageViewerScreen(imageUrl: String) {
@@ -30,9 +33,18 @@ fun ImageViewerScreen(imageUrl: String) {
     var offsetY by remember { mutableFloatStateOf(0f) }
 
     val focusRequester = remember { FocusRequester() }
+    val context = LocalContext.current
 
     LaunchedEffect(Unit) {
         focusRequester.requestFocus()
+    }
+
+    // Load at full original resolution so zooming in stays sharp instead of pixelating
+    val imageRequest = remember(imageUrl) {
+        ImageRequest.Builder(context)
+            .data(imageUrl)
+            .size(Size.ORIGINAL)
+            .build()
     }
 
     Box(
@@ -72,7 +84,7 @@ fun ImageViewerScreen(imageUrl: String) {
         contentAlignment = Alignment.Center,
     ) {
         AsyncImage(
-            model = imageUrl,
+            model = imageRequest,
             contentDescription = null,
             contentScale = ContentScale.Fit,
             modifier = Modifier
