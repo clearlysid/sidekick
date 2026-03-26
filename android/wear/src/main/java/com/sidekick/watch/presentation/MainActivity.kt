@@ -30,8 +30,11 @@ import com.sidekick.watch.data.SpacebotRepository
 import com.sidekick.watch.presentation.theme.SidekickTheme
 import com.sidekick.watch.ui.ChatScreen
 import com.sidekick.watch.ui.HomeScreen
+import com.sidekick.watch.ui.ImageViewerScreen
 import com.sidekick.watch.ui.SettingsScreen
 import com.sidekick.watch.viewmodel.ChatViewModel
+import java.net.URLDecoder
+import java.net.URLEncoder
 import java.util.Locale
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
@@ -172,7 +175,21 @@ class MainActivity : ComponentActivity() {
                                     uiState = uiState,
                                     conversationTitle = uiState.currentConversationTitle,
                                     onOpenTextInput = ::launchRemoteTextInput,
+                                    onImageClick = { url ->
+                                        val encoded = URLEncoder.encode(url, "UTF-8")
+                                        homeNavController.navigate("$HOME_IMAGE_ROUTE/$encoded")
+                                    },
                                 )
+                            }
+                            composable(
+                                route = "$HOME_IMAGE_ROUTE/{imageUrl}",
+                                arguments = listOf(navArgument("imageUrl") { type = NavType.StringType }),
+                            ) { backStackEntry ->
+                                val imageUrl = URLDecoder.decode(
+                                    backStackEntry.arguments?.getString("imageUrl").orEmpty(),
+                                    "UTF-8",
+                                )
+                                ImageViewerScreen(imageUrl = imageUrl)
                             }
                         }
                     } else {
@@ -249,6 +266,7 @@ class MainActivity : ComponentActivity() {
         const val PAGE_COUNT = 2
         const val HOME_LIST_ROUTE = "home/list"
         const val HOME_CONVERSATION_ROUTE = "home/conversation"
+        const val HOME_IMAGE_ROUTE = "home/image"
         const val HOME_CONVERSATIONS_PAGE_INCREMENT = 5
     }
 }

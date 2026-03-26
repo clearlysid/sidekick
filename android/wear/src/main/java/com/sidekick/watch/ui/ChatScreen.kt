@@ -1,6 +1,7 @@
 package com.sidekick.watch.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -45,6 +46,7 @@ fun ChatScreen(
     uiState: ChatUiState,
     conversationTitle: String,
     onOpenTextInput: () -> Unit,
+    onImageClick: (String) -> Unit = {},
 ) {
     val listState = rememberTransformingLazyColumnState()
     val transformationSpec = rememberTransformationSpec()
@@ -127,7 +129,8 @@ fun ChatScreen(
                                             modifier = Modifier
                                                 .fillMaxWidth()
                                                 .heightIn(max = 120.dp)
-                                                .clip(RoundedCornerShape(8.dp)),
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .clickable { onImageClick(segment.url) },
                                         )
                                     }
                                 }
