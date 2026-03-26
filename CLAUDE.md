@@ -16,6 +16,11 @@ AI assistant app. Monorepo with `android` (Wear OS) and `web`.
   4. Pair: `adb pair <ip>:<pairing-port>` (enter pairing code when prompted)
   5. Connect: `adb connect <ip>:<port>` (port shown under Debug over Wi-Fi, different from pairing port)
   6. Install: `~/Library/Android/sdk/platform-tools/adb -s <device> install -r <apk>`
+  7. Re-set assistant settings (Samsung Wear OS clears these on every reinstall):
+     ```
+     adb -s <device> shell settings put secure voice_interaction_service com.sidekick.watch/com.sidekick.watch.voice.SidekickVoiceInteractionService
+     adb -s <device> shell settings put secure assistant com.sidekick.watch/com.sidekick.watch.presentation.MainActivity
+     ```
 - Signing config is in `android/wear/build.gradle.kts` (hardcoded keystore, not committed)
 
 ### Architecture
