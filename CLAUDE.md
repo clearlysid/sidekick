@@ -9,7 +9,13 @@ AI assistant app. Monorepo with `android` (Wear OS) and `web`.
 - adb: `~/Library/Android/sdk/platform-tools/adb`
 - Build release APK: `JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" android/gradlew -p android :wear:assembleRelease`
 - APK output: `android/wear/build/outputs/apk/release/wear-release.apk`
-- Install on watch: `~/Library/Android/sdk/platform-tools/adb -s <device> install -r <apk>`
+- Deploy to watch:
+  1. Watch: Settings → About → tap Build number 7x → enable Developer Options
+  2. Watch: Settings → Developer Options → enable ADB debugging + Debug over Wi-Fi
+  3. Watch: use "Pair new device" option, note the IP:port and pairing code
+  4. Pair: `adb pair <ip>:<pairing-port>` (enter pairing code when prompted)
+  5. Connect: `adb connect <ip>:<port>` (port shown under Debug over Wi-Fi, different from pairing port)
+  6. Install: `~/Library/Android/sdk/platform-tools/adb -s <device> install -r <apk>`
 - Signing config is in `android/wear/build.gradle.kts` (hardcoded keystore, not committed)
 
 ### Architecture

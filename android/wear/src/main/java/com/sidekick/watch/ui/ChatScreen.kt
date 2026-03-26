@@ -3,10 +3,15 @@ package com.sidekick.watch.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import coil3.compose.AsyncImage
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -102,14 +107,31 @@ fun ChatScreen(
                                 )
                             }
                         } else {
-                            Text(
-                                text = message.text,
-                                style = MaterialTheme.typography.bodySmall,
-                                modifier =
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 8.dp, vertical = 2.dp),
-                            )
+                            val segments = remember(message.text) { parseMessageContent(message.text) }
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 8.dp, vertical = 2.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
+                                segments.forEach { segment ->
+                                    when (segment) {
+                                        is MessageSegment.Text -> Text(
+                                            text = segment.content,
+                                            style = MaterialTheme.typography.bodySmall,
+                                        )
+                                        is MessageSegment.Image -> AsyncImage(
+                                            model = segment.url,
+                                            contentDescription = segment.altText,
+                                            contentScale = ContentScale.Fit,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .heightIn(max = 120.dp)
+                                                .clip(RoundedCornerShape(8.dp)),
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }
