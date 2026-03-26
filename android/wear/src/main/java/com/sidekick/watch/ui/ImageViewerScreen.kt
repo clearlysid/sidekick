@@ -15,7 +15,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.focusTarget
+import androidx.compose.foundation.focusable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -51,8 +51,6 @@ fun ImageViewerScreen(imageUrl: String) {
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
-            .focusRequester(focusRequester)
-            .focusTarget()
             .onRotaryScrollEvent { event ->
                 // Clockwise (positive) = zoom in, counter-clockwise (negative) = zoom out
                 scale = (scale + event.verticalScrollPixels * 0.005f).coerceIn(1f, 5f)
@@ -62,6 +60,8 @@ fun ImageViewerScreen(imageUrl: String) {
                 }
                 true
             }
+            .focusRequester(focusRequester)
+            .focusable()
             .pointerInput(Unit) {
                 detectTransformGestures { _, pan, zoom, _ ->
                     scale = (scale * zoom).coerceIn(1f, 5f)
