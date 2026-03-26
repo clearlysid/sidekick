@@ -23,11 +23,9 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.wear.input.RemoteInputIntentHelper
-import com.sidekick.watch.data.OpenAIRepository
-import com.sidekick.watch.data.ResponseNotifier
 import com.sidekick.watch.data.SettingsRepository
-import com.sidekick.watch.data.SpacebotRepository
 import com.sidekick.watch.presentation.theme.SidekickTheme
+import com.sidekick.watch.tile.SidekickTileService
 import com.sidekick.watch.ui.ChatScreen
 import com.sidekick.watch.ui.HomeScreen
 import com.sidekick.watch.ui.ImageViewerScreen
@@ -36,34 +34,20 @@ import com.sidekick.watch.viewmodel.ChatViewModel
 import java.net.URLDecoder
 import java.net.URLEncoder
 import java.util.Locale
-import okhttp3.OkHttpClient
-import java.util.concurrent.TimeUnit
-
 class MainActivity : ComponentActivity() {
-    private val okHttpClient by lazy {
-        OkHttpClient.Builder()
-            .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(120, TimeUnit.SECONDS)
-            .writeTimeout(30, TimeUnit.SECONDS)
-            .build()
-    }
     private val settingsRepository by lazy { SettingsRepository(applicationContext) }
-    private val spacebotRepository by lazy { SpacebotRepository(okHttpClient) }
-    private val openAIRepository by lazy { OpenAIRepository(okHttpClient) }
-    private val responseNotifier by lazy { ResponseNotifier(applicationContext) }
 
     private val viewModel: ChatViewModel by viewModels {
         ChatViewModel.Factory(
+            context = applicationContext,
             settingsRepository = settingsRepository,
-            spacebotRepository = spacebotRepository,
-            openAIRepository = openAIRepository,
-            responseNotifier = responseNotifier,
         )
     }
 
     private var requestedHomePage by mutableStateOf(false)
     private var requestedConversationPageId by mutableStateOf<String?>(null)
     private var requestedAssistantVoiceLaunch by mutableStateOf(false)
+    private var requestedKeyboardLaunch by mutableStateOf(false)
     private var shouldCreateConversationAfterComposer: Boolean = false
 
     private val textInputLauncher =
@@ -123,6 +107,19 @@ class MainActivity : ComponentActivity() {
                     }
                     launchVoiceInput()
                     requestedAssistantVoiceLaunch = false
+                }
+            }
+
+            LaunchedEffect(requestedKeyboardLaunch) {
+                if (requestedKeyboardLaunch) {
+                    pagerState.animateScrollToPage(HOME_PAGE)
+                    homeNavController.navigate(HOME_LIST_ROUTE) {
+                        popUpTo(HOME_LIST_ROUTE) { inclusive = false }
+                        launchSingleTop = true
+                    }
+                    shouldCreateConversationAfterComposer = true
+                    launchRemoteTextInput()
+                    requestedKeyboardLaunch = false
                 }
             }
 
@@ -222,8 +219,13 @@ class MainActivity : ComponentActivity() {
     private fun handleLaunchIntent(intent: Intent?) {
         val action = intent?.action ?: return
         if (action == Intent.ACTION_ASSIST) {
+            val inputMode = intent.getStringExtra(SidekickTileService.EXTRA_INPUT_MODE) ?: "voice"
             requestedHomePage = true
-            requestedAssistantVoiceLaunch = true
+            if (inputMode == "keyboard") {
+                requestedKeyboardLaunch = true
+            } else {
+                requestedAssistantVoiceLaunch = true
+            }
         }
     }
 

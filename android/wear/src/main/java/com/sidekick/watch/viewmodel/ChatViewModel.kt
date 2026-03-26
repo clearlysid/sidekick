@@ -1,38 +1,31 @@
 package com.sidekick.watch.viewmodel
 
+import android.content.Context
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.sidekick.watch.BuildConfig
 import com.sidekick.watch.data.AgentBackends
+import com.sidekick.watch.data.AgentRequestBus
 import com.sidekick.watch.data.AgentSettings
-import com.sidekick.watch.data.OpenAIMessage
-import com.sidekick.watch.data.OpenAIRepository
-import com.sidekick.watch.data.ResponseNotifier
 import com.sidekick.watch.data.PersistedChatMessage
 import com.sidekick.watch.data.PersistedConversationState
 import com.sidekick.watch.data.PersistedConversationSummary
 import com.sidekick.watch.data.SettingsRepository
-import com.sidekick.watch.data.SpacebotMessage
-import com.sidekick.watch.data.SpacebotRepository
+import com.sidekick.watch.service.AgentService
 import java.util.UUID
-import kotlin.coroutines.cancellation.CancellationException
-import java.net.ConnectException
-import java.net.SocketTimeoutException
-import java.net.UnknownHostException
-import javax.net.ssl.SSLException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import org.json.JSONArray
+import org.json.JSONObject
 
 class ChatViewModel(
+    private val context: Context,
     private val settingsRepository: SettingsRepository,
-    private val spacebotRepository: SpacebotRepository,
-    private val openAIRepository: OpenAIRepository,
-    private val responseNotifier: ResponseNotifier,
 ) : ViewModel() {
     private val logTag = "SidekickInput"
 
@@ -71,14 +64,54 @@ class ChatViewModel(
         }
 
         viewModelScope.launch {
-            val persisted = settingsRepository.loadConversationState() ?: return@launch
-            _uiState.update { state ->
-                state.copy(
-                    conversations = persisted.conversations.map { it.toConversationSummary() },
-                    selectedConversationId = persisted.selectedConversationId ?: persisted.conversations.firstOrNull()?.id,
-                    messagesByConversation = persisted.messagesByConversation.mapValues { (_, messages) -> messages.mapNotNull { it.toChatMessageOrNull() } },
-                    backendConversationIds = persisted.backendConversationIds,
-                )
+            // Load persisted state BEFORE observing the bus to avoid overwriting
+            // DataStore state with empty in-memory state.
+            val persisted = settingsRepository.loadConversationState()
+            if (persisted != null) {
+                _uiState.update { state ->
+                    state.copy(
+                        conversations = persisted.conversations.map { it.toConversationSummary() },
+                        selectedConversationId = persisted.selectedConversationId ?: persisted.conversations.firstOrNull()?.id,
+                        messagesByConversation = persisted.messagesByConversation.mapValues { (_, messages) -> messages.mapNotNull { it.toChatMessageOrNull() } },
+                        backendConversationIds = persisted.backendConversationIds,
+                    )
+                }
+            }
+
+            AgentRequestBus.state.collect { requestState ->
+                val convId = requestState.conversationId ?: return@collect
+                _uiState.update { state ->
+                    when {
+                        requestState.error != null -> state.copy(
+                            isPolling = false,
+                            isSending = false,
+                            errorMessage = requestState.error,
+                        )
+                        requestState.finalText != null -> {
+                            val existing = state.messagesByConversation[convId].orEmpty()
+                            val withoutStreaming = existing.filter { it.id != STREAMING_MESSAGE_ID }
+                            val botMsg = ChatMessage(role = MessageRole.BOT, text = requestState.finalText)
+                            state.copy(
+                                messagesByConversation = state.messagesByConversation + (convId to (withoutStreaming + botMsg)),
+                                conversations = updateConversationMeta(state.conversations, convId, requestState.finalText, false),
+                                isPolling = false,
+                            )
+                        }
+                        requestState.isActive && requestState.streamingText.isNotEmpty() -> {
+                            val existing = state.messagesByConversation[convId].orEmpty()
+                            val withoutStreaming = existing.filter { it.id != STREAMING_MESSAGE_ID }
+                            val streamingMsg = ChatMessage(id = STREAMING_MESSAGE_ID, role = MessageRole.BOT, text = requestState.streamingText)
+                            state.copy(
+                                messagesByConversation = state.messagesByConversation + (convId to (withoutStreaming + streamingMsg)),
+                            )
+                        }
+                        else -> state
+                    }
+                }
+                if (requestState.finalText != null || requestState.error != null) {
+                    persistConversationState()
+                    AgentRequestBus.reset()
+                }
             }
         }
     }
@@ -279,141 +312,45 @@ class ChatViewModel(
         content: String,
         settings: AgentSettings,
     ) {
-        viewModelScope.launch {
-            val sendResult =
-                spacebotRepository.sendMessage(
-                    baseUrl = settings.baseUrl,
-                    authToken = settings.authToken,
-                    conversationId = backendConversationId,
-                    senderId = senderId,
-                    content = content,
-                )
-
-            if (sendResult.isFailure) {
-                _uiState.update {
-                    it.copy(
-                        isSending = false,
-                        errorMessage = formatNetworkError(sendResult.exceptionOrNull(), "send"),
-                    )
-                }
-                persistConversationState()
-                return@launch
-            }
-
-            _uiState.update { it.copy(isSending = false, isPolling = true) }
-
-            val pollResult =
-                spacebotRepository.pollReplies(
-                    baseUrl = settings.baseUrl,
-                    authToken = settings.authToken,
-                    conversationId = backendConversationId,
-                )
-
-            if (pollResult.isFailure) {
-                _uiState.update {
-                    it.copy(
-                        isPolling = false,
-                        errorMessage = formatNetworkError(pollResult.exceptionOrNull(), "poll"),
-                    )
-                }
-                persistConversationState()
-                return@launch
-            }
-
-            val replyMessages = mapSpacebotMessages(pollResult.getOrNull().orEmpty())
-            val latestReplyText = replyMessages.lastOrNull()?.text.orEmpty()
-            if (latestReplyText.isNotBlank()) {
-                responseNotifier.notifyIfInBackground(latestReplyText)
-            }
-            _uiState.update {
-                val existingMessages = it.messagesByConversation[localConversationId].orEmpty()
-                val updatedMessages = if (replyMessages.isEmpty()) existingMessages else existingMessages + replyMessages
-                it.copy(
-                    messagesByConversation = it.messagesByConversation + (localConversationId to updatedMessages),
-                    conversations =
-                        if (latestReplyText.isBlank()) it.conversations
-                        else {
-                            updateConversationMeta(
-                                conversations = it.conversations,
-                                conversationId = localConversationId,
-                                inputText = latestReplyText,
-                                allowInitialPromptUpdate = false,
-                            )
-                        },
-                    isPolling = false,
-                )
-            }
-            persistConversationState()
-        }
+        _uiState.update { it.copy(isSending = false, isPolling = true) }
+        AgentService.startSpacebot(
+            context = context,
+            conversationId = localConversationId,
+            backendConversationId = backendConversationId,
+            settings = settings,
+            content = content,
+            senderId = senderId,
+        )
     }
 
     private fun sendViaOpenAI(localConversationId: String, backendConversationId: String, settings: AgentSettings) {
-        viewModelScope.launch {
-            _uiState.update { it.copy(isSending = false, isPolling = true) }
+        _uiState.update { it.copy(isSending = false, isPolling = true) }
 
-            val history = _uiState.value.messagesByConversation[localConversationId].orEmpty()
-            val openAIMessages = history.map { msg ->
-                OpenAIMessage(
-                    role = when (msg.role) {
+        val history = _uiState.value.messagesByConversation[localConversationId].orEmpty()
+        val messagesJson = serializeMessages(history)
+
+        AgentService.startOpenAI(
+            context = context,
+            conversationId = localConversationId,
+            backendConversationId = backendConversationId,
+            settings = settings,
+            messagesJson = messagesJson,
+        )
+    }
+
+    private fun serializeMessages(messages: List<ChatMessage>): String {
+        val array = JSONArray()
+        messages.forEach { msg ->
+            array.put(
+                JSONObject()
+                    .put("role", when (msg.role) {
                         MessageRole.USER -> "user"
                         MessageRole.BOT -> "assistant"
-                    },
-                    content = msg.text,
-                )
-            }
-
-            try {
-                val botMessageId = UUID.randomUUID().toString()
-                val buffer = StringBuilder()
-
-                openAIRepository.sendMessageStreaming(
-                    baseUrl = settings.baseUrl,
-                    authToken = settings.authToken,
-                    model = settings.model,
-                    messages = openAIMessages,
-                    user = backendConversationId,
-                ).collect { chunk ->
-                    buffer.append(chunk)
-                    val snapshot = buffer.toString()
-                    _uiState.update { state ->
-                        val existing = state.messagesByConversation[localConversationId].orEmpty()
-                        val withoutStreaming = existing.filter { it.id != botMessageId }
-                        val streamingMessage = ChatMessage(id = botMessageId, role = MessageRole.BOT, text = snapshot)
-                        state.copy(
-                            messagesByConversation = state.messagesByConversation + (localConversationId to (withoutStreaming + streamingMessage)),
-                        )
-                    }
-                }
-
-                val finalText = buffer.toString()
-                if (finalText.isNotBlank()) {
-                    responseNotifier.notifyIfInBackground(finalText)
-                }
-                _uiState.update { state ->
-                    state.copy(
-                        conversations =
-                            if (finalText.isBlank()) state.conversations
-                            else updateConversationMeta(
-                                conversations = state.conversations,
-                                conversationId = localConversationId,
-                                inputText = finalText,
-                                allowInitialPromptUpdate = false,
-                            ),
-                        isPolling = false,
-                    )
-                }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                _uiState.update {
-                    it.copy(
-                        isPolling = false,
-                        errorMessage = formatNetworkError(e, "send"),
-                    )
-                }
-            }
-            persistConversationState()
+                    })
+                    .put("content", msg.text)
+            )
         }
+        return array.toString()
     }
 
     private fun persistConversationState() {
@@ -421,36 +358,6 @@ class ChatViewModel(
         viewModelScope.launch {
             settingsRepository.saveConversationState(state.toPersistedConversationState())
         }
-    }
-
-    private fun mapSpacebotMessages(items: List<SpacebotMessage>): List<ChatMessage> {
-        val mapped = mutableListOf<ChatMessage>()
-        val streamingBuffer = StringBuilder()
-
-        fun flushStreamingBuffer() {
-            if (streamingBuffer.isNotEmpty()) {
-                mapped += ChatMessage(role = MessageRole.BOT, text = streamingBuffer.toString())
-                streamingBuffer.clear()
-            }
-        }
-
-        for (item in items) {
-            when (item.type) {
-                SpacebotRepository.TYPE_STREAM_CHUNK -> streamingBuffer.append(item.content)
-                SpacebotRepository.TYPE_STREAM_END -> flushStreamingBuffer()
-                SpacebotRepository.TYPE_TEXT,
-                SpacebotRepository.TYPE_FILE,
-                -> {
-                    flushStreamingBuffer()
-                    if (item.content.isNotBlank()) {
-                        mapped += ChatMessage(role = MessageRole.BOT, text = item.content)
-                    }
-                }
-            }
-        }
-
-        flushStreamingBuffer()
-        return mapped
     }
 
     private fun updateConversationMeta(
@@ -476,43 +383,19 @@ class ChatViewModel(
         }
     }
 
-    private fun formatNetworkError(error: Throwable?, phase: String): String {
-        val root = rootCause(error)
-        val suffix = if (phase == "send") "while sending" else "while waiting for reply"
-        return when (root) {
-            is UnknownHostException ->
-                "Couldn't resolve server host $suffix. Check the Base URL and network."
-            is ConnectException ->
-                "Couldn't connect to server $suffix. If this is a private/Tailnet host, make sure the watch can reach it."
-            is SocketTimeoutException ->
-                "Server timed out $suffix. Check connectivity and try again."
-            is SSLException ->
-                "TLS/SSL handshake failed $suffix. Check server certificate/HTTPS configuration."
-            else ->
-                error?.message ?: "Request failed $suffix."
-        }
-    }
-
-    private fun rootCause(error: Throwable?): Throwable? {
-        var current = error
-        while (current?.cause != null) {
-            current = current.cause
-        }
-        return current
-    }
-
     class Factory(
+        private val context: Context,
         private val settingsRepository: SettingsRepository,
-        private val spacebotRepository: SpacebotRepository,
-        private val openAIRepository: OpenAIRepository,
-        private val responseNotifier: ResponseNotifier,
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            return ChatViewModel(settingsRepository, spacebotRepository, openAIRepository, responseNotifier) as T
+            return ChatViewModel(context, settingsRepository) as T
         }
     }
 
+    companion object {
+        private const val STREAMING_MESSAGE_ID = "__streaming__"
+    }
 }
 
 private fun ChatUiState.toPersistedConversationState(): PersistedConversationState =
