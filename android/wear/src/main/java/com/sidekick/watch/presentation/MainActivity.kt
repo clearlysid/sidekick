@@ -1,13 +1,19 @@
 package com.sidekick.watch.presentation
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Bundle
 import android.app.RemoteInput
+import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts.RequestPermission
 import androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult
 import androidx.activity.viewModels
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -30,10 +36,13 @@ import com.sidekick.watch.ui.ChatScreen
 import com.sidekick.watch.ui.HomeScreen
 import com.sidekick.watch.ui.ImageViewerScreen
 import com.sidekick.watch.ui.SettingsScreen
+import com.sidekick.watch.ui.VoiceListeningScreen
 import com.sidekick.watch.viewmodel.ChatViewModel
+import com.sidekick.watch.voice.SidekickVoiceInteractionSession
 import java.net.URLDecoder
 import java.net.URLEncoder
 import java.util.Locale
+
 class MainActivity : ComponentActivity() {
     private val settingsRepository by lazy { SettingsRepository(applicationContext) }
 
@@ -46,9 +55,37 @@ class MainActivity : ComponentActivity() {
 
     private var requestedHomePage by mutableStateOf(false)
     private var requestedConversationPageId by mutableStateOf<String?>(null)
-    private var requestedAssistantVoiceLaunch by mutableStateOf(false)
     private var requestedKeyboardLaunch by mutableStateOf(false)
     private var shouldCreateConversationAfterComposer: Boolean = false
+    private var isVoiceListening by mutableStateOf(false)
+    private var voiceRmsLevel by mutableStateOf(0f)
+
+    private var speechRecognizer: SpeechRecognizer? = null
+
+    private val recognitionListener = object : RecognitionListener {
+        override fun onReadyForSpeech(params: Bundle?) {}
+        override fun onBeginningOfSpeech() {}
+        override fun onRmsChanged(rmsdB: Float) { voiceRmsLevel = rmsdB }
+        override fun onBufferReceived(buffer: ByteArray?) {}
+        override fun onEndOfSpeech() {}
+        override fun onPartialResults(partialResults: Bundle?) {}
+        override fun onEvent(eventType: Int, params: Bundle?) {}
+
+        override fun onResults(results: Bundle?) {
+            val text = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                ?.firstOrNull()?.trim().orEmpty()
+            isVoiceListening = false
+            if (text.isNotEmpty()) startFreshConversationFromInput(text)
+        }
+
+        override fun onError(error: Int) {
+            isVoiceListening = false
+        }
+    }
+
+    private val audioPermissionLauncher = registerForActivityResult(RequestPermission()) { granted ->
+        if (granted) startVoiceRecognition()
+    }
 
     private val textInputLauncher =
         registerForActivityResult(StartActivityForResult()) { result ->
@@ -63,19 +100,6 @@ class MainActivity : ComponentActivity() {
                 }
             }
             shouldCreateConversationAfterComposer = false
-        }
-
-    private val voiceInputLauncher =
-        registerForActivityResult(StartActivityForResult()) { result ->
-            val spokenText =
-                result.data
-                    ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
-                    ?.firstOrNull()
-                    .orEmpty()
-                    .trim()
-            if (spokenText.isNotEmpty()) {
-                startFreshConversationFromInput(spokenText)
-            }
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -98,18 +122,6 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            LaunchedEffect(requestedAssistantVoiceLaunch) {
-                if (requestedAssistantVoiceLaunch) {
-                    pagerState.animateScrollToPage(HOME_PAGE)
-                    homeNavController.navigate(HOME_LIST_ROUTE) {
-                        popUpTo(HOME_LIST_ROUTE) { inclusive = false }
-                        launchSingleTop = true
-                    }
-                    launchVoiceInput()
-                    requestedAssistantVoiceLaunch = false
-                }
-            }
-
             LaunchedEffect(requestedKeyboardLaunch) {
                 if (requestedKeyboardLaunch) {
                     pagerState.animateScrollToPage(HOME_PAGE)
@@ -127,83 +139,88 @@ class MainActivity : ComponentActivity() {
                 val conversationId = requestedConversationPageId ?: return@LaunchedEffect
                 pagerState.animateScrollToPage(HOME_PAGE)
                 homeNavController.navigate("$HOME_CONVERSATION_ROUTE/$conversationId") {
-                    launchSingleTop = true
+                    popUpTo(HOME_LIST_ROUTE)
                 }
                 requestedConversationPageId = null
             }
 
             SidekickTheme(themeId = uiState.themeId) {
-                HorizontalPager(
-                    state = pagerState,
-                    modifier = Modifier.fillMaxSize(),
-                ) { page ->
-                    if (page == HOME_PAGE) {
-                        NavHost(
-                            navController = homeNavController,
-                            startDestination = HOME_LIST_ROUTE,
-                        ) {
-                            composable(HOME_LIST_ROUTE) {
-                                HomeScreen(
-                                    conversations = uiState.conversations,
-                                    onNewConversationWithKeyboard = {
-                                        shouldCreateConversationAfterComposer = true
-                                        launchRemoteTextInput()
-                                    },
-                                    onNewConversationWithVoice = ::launchVoiceInput,
-                                    onOpenConversation = { conversationId ->
-                                        viewModel.openConversation(conversationId)
-                                        homeNavController.navigate("$HOME_CONVERSATION_ROUTE/$conversationId")
-                                    },
-                                    onDeleteConversation = viewModel::deleteConversation,
-                                    loadMoreIncrement = HOME_CONVERSATIONS_PAGE_INCREMENT,
-                                )
-                            }
-                            composable(
-                                route = "$HOME_CONVERSATION_ROUTE/{conversationId}",
-                                arguments = listOf(navArgument("conversationId") { type = NavType.StringType }),
-                            ) { backStackEntry ->
-                                val conversationId = backStackEntry.arguments?.getString("conversationId").orEmpty()
-                                LaunchedEffect(conversationId) {
-                                    if (conversationId.isNotBlank()) {
-                                        viewModel.openConversation(conversationId)
-                                    }
+                Box(modifier = Modifier.fillMaxSize()) {
+                    HorizontalPager(
+                        state = pagerState,
+                        modifier = Modifier.fillMaxSize(),
+                    ) { page ->
+                        if (page == HOME_PAGE) {
+                            NavHost(
+                                navController = homeNavController,
+                                startDestination = HOME_LIST_ROUTE,
+                            ) {
+                                composable(HOME_LIST_ROUTE) {
+                                    HomeScreen(
+                                        conversations = uiState.conversations,
+                                        onNewConversationWithKeyboard = {
+                                            shouldCreateConversationAfterComposer = true
+                                            launchRemoteTextInput()
+                                        },
+                                        onNewConversationWithVoice = ::startVoiceRecognitionWithPermission,
+                                        onOpenConversation = { conversationId ->
+                                            viewModel.openConversation(conversationId)
+                                            homeNavController.navigate("$HOME_CONVERSATION_ROUTE/$conversationId")
+                                        },
+                                        onDeleteConversation = viewModel::deleteConversation,
+                                        loadMoreIncrement = HOME_CONVERSATIONS_PAGE_INCREMENT,
+                                    )
                                 }
-                                ChatScreen(
-                                    uiState = uiState,
-                                    conversationTitle = uiState.currentConversationTitle,
-                                    onOpenTextInput = ::launchRemoteTextInput,
-                                    onImageClick = { url ->
-                                        val encoded = URLEncoder.encode(url, "UTF-8")
-                                        homeNavController.navigate("$HOME_IMAGE_ROUTE/$encoded")
-                                    },
-                                )
+                                composable(
+                                    route = "$HOME_CONVERSATION_ROUTE/{conversationId}",
+                                    arguments = listOf(navArgument("conversationId") { type = NavType.StringType }),
+                                ) { backStackEntry ->
+                                    val conversationId = backStackEntry.arguments?.getString("conversationId").orEmpty()
+                                    LaunchedEffect(conversationId) {
+                                        if (conversationId.isNotBlank()) {
+                                            viewModel.openConversation(conversationId)
+                                        }
+                                    }
+                                    ChatScreen(
+                                        uiState = uiState,
+                                        conversationTitle = uiState.currentConversationTitle,
+                                        onOpenTextInput = ::launchRemoteTextInput,
+                                        onImageClick = { url ->
+                                            val encoded = URLEncoder.encode(url, "UTF-8")
+                                            homeNavController.navigate("$HOME_IMAGE_ROUTE/$encoded")
+                                        },
+                                    )
+                                }
+                                composable(
+                                    route = "$HOME_IMAGE_ROUTE/{imageUrl}",
+                                    arguments = listOf(navArgument("imageUrl") { type = NavType.StringType }),
+                                ) { backStackEntry ->
+                                    val imageUrl = URLDecoder.decode(
+                                        backStackEntry.arguments?.getString("imageUrl").orEmpty(),
+                                        "UTF-8",
+                                    )
+                                    ImageViewerScreen(imageUrl = imageUrl)
+                                }
                             }
-                            composable(
-                                route = "$HOME_IMAGE_ROUTE/{imageUrl}",
-                                arguments = listOf(navArgument("imageUrl") { type = NavType.StringType }),
-                            ) { backStackEntry ->
-                                val imageUrl = URLDecoder.decode(
-                                    backStackEntry.arguments?.getString("imageUrl").orEmpty(),
-                                    "UTF-8",
-                                )
-                                ImageViewerScreen(imageUrl = imageUrl)
-                            }
+                        } else {
+                            SettingsScreen(
+                                selectedAgentFlavorId = uiState.agentFlavorInput,
+                                selectedAgentFlavorName = uiState.selectedAgentFlavorName,
+                                baseUrl = uiState.baseUrlInput,
+                                model = uiState.modelInput,
+                                authToken = uiState.authTokenInput,
+                                themeId = uiState.themeId,
+                                onSaveAgentFlavor = viewModel::saveAgentFlavor,
+                                onSaveBaseUrl = viewModel::saveBaseUrl,
+                                onSaveModel = viewModel::saveModel,
+                                onSaveAuthToken = viewModel::saveAuthToken,
+                                onSaveTheme = viewModel::saveTheme,
+                                onResetAll = viewModel::resetAll,
+                            )
                         }
-                    } else {
-                        SettingsScreen(
-                            selectedAgentFlavorId = uiState.agentFlavorInput,
-                            selectedAgentFlavorName = uiState.selectedAgentFlavorName,
-                            baseUrl = uiState.baseUrlInput,
-                            model = uiState.modelInput,
-                            authToken = uiState.authTokenInput,
-                            themeId = uiState.themeId,
-                            onSaveAgentFlavor = viewModel::saveAgentFlavor,
-                            onSaveBaseUrl = viewModel::saveBaseUrl,
-                            onSaveModel = viewModel::saveModel,
-                            onSaveAuthToken = viewModel::saveAuthToken,
-                            onSaveTheme = viewModel::saveTheme,
-                            onResetAll = viewModel::resetAll,
-                        )
+                    }
+                    if (isVoiceListening) {
+                        VoiceListeningScreen(rmsLevel = voiceRmsLevel)
                     }
                 }
             }
@@ -216,15 +233,28 @@ class MainActivity : ComponentActivity() {
         handleLaunchIntent(intent)
     }
 
+    override fun onDestroy() {
+        speechRecognizer?.destroy()
+        speechRecognizer = null
+        super.onDestroy()
+    }
+
     private fun handleLaunchIntent(intent: Intent?) {
         val action = intent?.action ?: return
         if (action == Intent.ACTION_ASSIST) {
+            // Text already captured by VoiceInteractionSession — skip to conversation
+            val voiceText = intent.getStringExtra(SidekickVoiceInteractionSession.EXTRA_VOICE_TEXT)
+            if (voiceText != null) {
+                intent.removeExtra(SidekickVoiceInteractionSession.EXTRA_VOICE_TEXT)
+                startFreshConversationFromInput(voiceText)
+                return
+            }
             val inputMode = intent.getStringExtra(SidekickTileService.EXTRA_INPUT_MODE) ?: "voice"
-            requestedHomePage = true
             if (inputMode == "keyboard") {
+                requestedHomePage = true
                 requestedKeyboardLaunch = true
             } else {
-                requestedAssistantVoiceLaunch = true
+                startVoiceRecognitionWithPermission()
             }
         }
     }
@@ -239,20 +269,27 @@ class MainActivity : ComponentActivity() {
         textInputLauncher.launch(intent)
     }
 
-    private fun launchVoiceInput() {
-        val voiceIntent =
-            Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault().toLanguageTag())
-                putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak message")
-            }
-        if (voiceIntent.resolveActivity(packageManager) != null) {
-            voiceInputLauncher.launch(voiceIntent)
+    private fun startVoiceRecognitionWithPermission() {
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+            startVoiceRecognition()
         } else {
-            shouldCreateConversationAfterComposer = true
-            launchRemoteTextInput()
+            audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
         }
+    }
+
+    private fun startVoiceRecognition() {
+        speechRecognizer?.destroy()
+        speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this).apply {
+            setRecognitionListener(recognitionListener)
+        }
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault().toLanguageTag())
+        }
+        voiceRmsLevel = 0f
+        isVoiceListening = true
+        speechRecognizer?.startListening(intent)
     }
 
     private fun startFreshConversationFromInput(inputText: String) {
