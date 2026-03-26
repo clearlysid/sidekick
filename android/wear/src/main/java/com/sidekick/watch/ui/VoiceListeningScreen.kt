@@ -1,6 +1,7 @@
 package com.sidekick.watch.ui
 
 import android.graphics.RuntimeShader
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
@@ -76,9 +77,21 @@ private const val GLOW_SHADER_SRC = """
 """
 
 @Composable
-fun VoiceListeningScreen(rmsLevel: Float = 0f, partialText: String = "") {
-    val primaryColor = MaterialTheme.colorScheme.primary
-    val tertiaryColor = MaterialTheme.colorScheme.tertiary
+fun VoiceListeningScreen(rmsLevel: Float = 0f, partialText: String = "", isReady: Boolean = true) {
+    // Warm-up: yellow/orange, Ready: theme primary/tertiary
+    val warmupColor1 = Color(0xFFFFB347) // orange
+    val warmupColor2 = Color(0xFFFFD700) // gold
+
+    val color1 by animateColorAsState(
+        targetValue = if (isReady) MaterialTheme.colorScheme.primary else warmupColor1,
+        animationSpec = tween(600),
+        label = "color1",
+    )
+    val color2 by animateColorAsState(
+        targetValue = if (isReady) MaterialTheme.colorScheme.tertiary else warmupColor2,
+        animationSpec = tween(600),
+        label = "color2",
+    )
 
     val normalizedRms = ((rmsLevel + 2f) / 12f).coerceIn(0f, 1f)
     val animatedRms by animateFloatAsState(
@@ -120,11 +133,11 @@ fun VoiceListeningScreen(rmsLevel: Float = 0f, partialText: String = "") {
             shader.setFloatUniform("time", time)
             shader.setFloatUniform(
                 "color1",
-                primaryColor.red, primaryColor.green, primaryColor.blue,
+                color1.red, color1.green, color1.blue,
             )
             shader.setFloatUniform(
                 "color2",
-                tertiaryColor.red, tertiaryColor.green, tertiaryColor.blue,
+                color2.red, color2.green, color2.blue,
             )
 
             drawRect(brush = shaderBrush)
@@ -147,12 +160,14 @@ fun VoiceListeningScreen(rmsLevel: Float = 0f, partialText: String = "") {
                     overflow = TextOverflow.Ellipsis,
                 )
             } else {
-                Text(
-                    text = "Listening\u2026",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color.White.copy(alpha = 0.6f),
-                    textAlign = TextAlign.Center,
-                )
+                if (isReady) {
+                    Text(
+                        text = "Ask Sidekick",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.White.copy(alpha = 0.6f),
+                        textAlign = TextAlign.Center,
+                    )
+                }
             }
         }
     }

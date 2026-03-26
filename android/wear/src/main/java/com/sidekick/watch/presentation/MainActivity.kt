@@ -60,11 +60,12 @@ class MainActivity : ComponentActivity() {
     private var isVoiceListening by mutableStateOf(false)
     private var voiceRmsLevel by mutableStateOf(0f)
     private var voicePartialText by mutableStateOf("")
+    private var voiceReady by mutableStateOf(false)
 
     private var speechRecognizer: SpeechRecognizer? = null
 
     private val recognitionListener = object : RecognitionListener {
-        override fun onReadyForSpeech(params: Bundle?) {}
+        override fun onReadyForSpeech(params: Bundle?) { voiceReady = true }
         override fun onBeginningOfSpeech() {}
         override fun onRmsChanged(rmsdB: Float) { voiceRmsLevel = rmsdB }
         override fun onBufferReceived(buffer: ByteArray?) {}
@@ -231,6 +232,7 @@ class MainActivity : ComponentActivity() {
                         VoiceListeningScreen(
                             rmsLevel = voiceRmsLevel,
                             partialText = voicePartialText,
+                            isReady = voiceReady,
                         )
                     }
                 }
@@ -301,6 +303,7 @@ class MainActivity : ComponentActivity() {
         }
         voiceRmsLevel = 0f
         voicePartialText = ""
+        voiceReady = false
         isVoiceListening = true
         speechRecognizer?.startListening(intent)
     }
