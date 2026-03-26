@@ -59,6 +59,7 @@ class MainActivity : ComponentActivity() {
     private var shouldCreateConversationAfterComposer: Boolean = false
     private var isVoiceListening by mutableStateOf(false)
     private var voiceRmsLevel by mutableStateOf(0f)
+    private var voicePartialText by mutableStateOf("")
 
     private var speechRecognizer: SpeechRecognizer? = null
 
@@ -68,18 +69,25 @@ class MainActivity : ComponentActivity() {
         override fun onRmsChanged(rmsdB: Float) { voiceRmsLevel = rmsdB }
         override fun onBufferReceived(buffer: ByteArray?) {}
         override fun onEndOfSpeech() {}
-        override fun onPartialResults(partialResults: Bundle?) {}
+        override fun onPartialResults(partialResults: Bundle?) {
+            val text = partialResults
+                ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                ?.firstOrNull()?.trim().orEmpty()
+            voicePartialText = text
+        }
         override fun onEvent(eventType: Int, params: Bundle?) {}
 
         override fun onResults(results: Bundle?) {
             val text = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                 ?.firstOrNull()?.trim().orEmpty()
             isVoiceListening = false
+            voicePartialText = ""
             if (text.isNotEmpty()) startFreshConversationFromInput(text)
         }
 
         override fun onError(error: Int) {
             isVoiceListening = false
+            voicePartialText = ""
         }
     }
 
@@ -220,7 +228,10 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                     if (isVoiceListening) {
-                        VoiceListeningScreen(rmsLevel = voiceRmsLevel)
+                        VoiceListeningScreen(
+                            rmsLevel = voiceRmsLevel,
+                            partialText = voicePartialText,
+                        )
                     }
                 }
             }
@@ -285,9 +296,11 @@ class MainActivity : ComponentActivity() {
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault().toLanguageTag())
         }
         voiceRmsLevel = 0f
+        voicePartialText = ""
         isVoiceListening = true
         speechRecognizer?.startListening(intent)
     }
